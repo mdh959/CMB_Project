@@ -1,5 +1,4 @@
 [dependencies]
-openssl = ">=3, <3.6"
 uv = ">=0.4"
 matplotlib = ">=1"
 

@@ -83,8 +83,6 @@ packages:
   - brotli-bin 1.2.0 hce9b42c_0
   - libbrotlidec 1.2.0 h95a88de_0
   - libbrotlienc 1.2.0 hb1b9735_0
-  arch: arm64
-  platform: osx
   license: MIT
   license_family: MIT
   purls: []
@@ -97,8 +95,6 @@ packages:
   - __osx >=11.0
   - libbrotlidec 1.2.0 h95a88de_0
   - libbrotlienc 1.2.0 hb1b9735_0
-  arch: arm64
-  platform: osx
   license: MIT
   license_family: MIT
   purls: []
@@ -109,8 +105,6 @@ packages:
   md5: 58fd217444c2a5701a44244faf518206
   depends:
   - __osx >=11.0
-  arch: arm64
-  platform: osx
   license: bzip2-1.0.6
   license_family: BSD
   purls: []
@@ -152,8 +146,6 @@ packages:
   - python >=3.14.0rc2,<3.15.0a0
   - python >=3.14.0rc2,<3.15.0a0 *_cp314
   - python_abi 3.14.* *_cp314
-  arch: arm64
-  platform: osx
   license: BSD-3-Clause
   license_family: BSD
   purls:
@@ -193,8 +185,6 @@ packages:
   depends:
   - libfreetype 2.14.1 hce30654_0
   - libfreetype6 2.14.1 h6da58f4_0
-  arch: arm64
-  platform: osx
   license: GPL-2.0-only OR FTL
   purls: []
   size: 173399
@@ -204,8 +194,6 @@ packages:
   md5: 5eb22c1d7b3fc4abb50d92d621583137
   depends:
   - __osx >=11.0
-  arch: arm64
-  platform: osx
   license: MIT
   license_family: MIT
   purls: []
@@ -220,8 +208,6 @@ packages:
   - libcxx >=19
   - __osx >=11.0
   - python_abi 3.14.* *_cp314
-  arch: arm64
-  platform: osx
   license: BSD-3-Clause
   license_family: BSD
   purls:
@@ -235,8 +221,6 @@ packages:
   - __osx >=11.0
   - libjpeg-turbo >=3.0.0,<4.0a0
   - libtiff >=4.7.0,<4.8.0a0
-  arch: arm64
-  platform: osx
   license: MIT
   license_family: MIT
   purls: []
@@ -248,8 +232,6 @@ packages:
   depends:
   - __osx >=11.0
   - libcxx >=18
-  arch: arm64
-  platform: osx
   license: Apache-2.0
   license_family: Apache
   purls: []
@@ -268,8 +250,6 @@ packages:
   - mkl <2026
   - liblapacke 3.9.0   38*_openblas
   - blas 2.138   openblas
-  arch: arm64
-  platform: osx
   license: BSD-3-Clause
   license_family: BSD
   purls: []
@@ -280,8 +260,6 @@ packages:
   md5: 07d43b5e2b6f4a73caed8238b60fabf5
   depends:
   - __osx >=11.0
-  arch: arm64
-  platform: osx
   license: MIT
   license_family: MIT
   purls: []
@@ -293,8 +271,6 @@ packages:
   depends:
   - __osx >=11.0
   - libbrotlicommon 1.2.0 h87ba0bc_0
-  arch: arm64
-  platform: osx
   license: MIT
   license_family: MIT
   purls: []
@@ -306,8 +282,6 @@ packages:
   depends:
   - __osx >=11.0
   - libbrotlicommon 1.2.0 h87ba0bc_0
-  arch: arm64
-  platform: osx
   license: MIT
   license_family: MIT
   purls: []
@@ -323,8 +297,6 @@ packages:
   - liblapack  3.9.0   38*_openblas
   - liblapacke 3.9.0   38*_openblas
   - blas 2.138   openblas
-  arch: arm64
-  platform: osx
   license: BSD-3-Clause
   license_family: BSD
   purls: []
@@ -335,8 +307,6 @@ packages:
   md5: 4346830dcc0c0e930328fddb0b829f63
   depends:
   - __osx >=11.0
-  arch: arm64
-  platform: osx
   license: Apache-2.0 WITH LLVM-exception
   license_family: Apache
   purls: []
@@ -347,8 +317,6 @@ packages:
   md5: 3baf58a5a87e7c2f4d243ce2f8f2fe5c
   depends:
   - __osx >=11.0
-  arch: arm64
-  platform: osx
   license: MIT
   license_family: MIT
   purls: []
@@ -361,8 +329,6 @@ packages:
   - __osx >=11.0
   constrains:
   - expat 2.7.1.*
-  arch: arm64
-  platform: osx
   license: MIT
   license_family: MIT
   purls: []
@@ -373,8 +339,6 @@ packages:
   md5: 411ff7cd5d1472bba0f55c0faf04453b
   depends:
   - __osx >=11.0
-  arch: arm64
-  platform: osx
   license: MIT
   license_family: MIT
   purls: []
@@ -385,8 +349,6 @@ packages:
   md5: f35fb38e89e2776994131fbf961fa44b
   depends:
   - libfreetype6 >=2.14.1
-  arch: arm64
-  platform: osx
   license: GPL-2.0-only OR FTL
   purls: []
   size: 7810
@@ -400,8 +362,6 @@ packages:
   - libzlib >=1.3.1,<2.0a0
   constrains:
   - freetype >=2.14.1
-  arch: arm64
-  platform: osx
   license: GPL-2.0-only OR FTL
   purls: []
   size: 346703
@@ -411,8 +371,6 @@ packages:
   md5: f699348e3f4f924728e33551b1920f79
   depends:
   - libgfortran5 15.2.0 h742603c_1
-  arch: arm64
-  platform: osx
   license: GPL-3.0-only WITH GCC-exception-3.1
   license_family: GPL
   purls: []
@@ -425,8 +383,6 @@ packages:
   - llvm-openmp >=8.0.0
   constrains:
   - libgfortran 15.2.0
-  arch: arm64
-  platform: osx
   license: GPL-3.0-only WITH GCC-exception-3.1
   license_family: GPL
   purls: []
@@ -439,8 +395,6 @@ packages:
   - __osx >=11.0
   constrains:
   - jpeg <0.0.0a
-  arch: arm64
-  platform: osx
   license: IJG AND BSD-3-Clause AND Zlib
   purls: []
   size: 553624
@@ -455,8 +409,6 @@ packages:
   - liblapacke 3.9.0   38*_openblas
   - blas 2.138   openblas
   - libcblas   3.9.0   38*_openblas
-  arch: arm64
-  platform: osx
   license: BSD-3-Clause
   license_family: BSD
   purls: []
@@ -469,8 +421,6 @@ packages:
   - __osx >=11.0
   constrains:
   - xz 5.8.1.*
-  arch: arm64
-  platform: osx
   license: 0BSD
   purls: []
   size: 92286
@@ -480,8 +430,6 @@ packages:
   md5: 85ccccb47823dd9f7a99d2c7f530342f
   depends:
   - __osx >=11.0
-  arch: arm64
-  platform: osx
   license: BSD-2-Clause
   license_family: BSD
   purls: []
@@ -497,8 +445,6 @@ packages:
   - llvm-openmp >=19.1.7
   constrains:
   - openblas >=0.3.30,<0.3.31.0a0
-  arch: arm64
-  platform: osx
   license: BSD-3-Clause
   license_family: BSD
   purls: []
@@ -510,8 +456,6 @@ packages:
   depends:
   - __osx >=11.0
   - libzlib >=1.3.1,<2.0a0
-  arch: arm64
-  platform: osx
   license: zlib-acknowledgement
   purls: []
   size: 287056
@@ -523,8 +467,6 @@ packages:
   - __osx >=11.0
   - icu >=75.1,<76.0a0
   - libzlib >=1.3.1,<2.0a0
-  arch: arm64
-  platform: osx
   license: blessing
   purls: []
   size: 902645
@@ -542,8 +484,6 @@ packages:
   - libwebp-base >=1.6.0,<2.0a0
   - libzlib >=1.3.1,<2.0a0
   - zstd >=1.5.7,<1.6.0a0
-  arch: arm64
-  platform: osx
   license: HPND
   purls: []
   size: 373640
@@ -555,8 +495,6 @@ packages:
   - __osx >=11.0
   constrains:
   - libwebp 1.6.0
-  arch: arm64
-  platform: osx
   license: BSD-3-Clause
   license_family: BSD
   purls: []
@@ -570,8 +508,6 @@ packages:
   - pthread-stubs
   - xorg-libxau >=1.0.11,<2.0a0
   - xorg-libxdmcp
-  arch: arm64
-  platform: osx
   license: MIT
   license_family: MIT
   purls: []
@@ -584,8 +520,6 @@ packages:
   - __osx >=11.0
   constrains:
   - zlib 1.3.1 *_2
-  arch: arm64
-  platform: osx
   license: Zlib
   license_family: Other
   purls: []
@@ -599,8 +533,6 @@ packages:
   constrains:
   - openmp 21.1.4|21.1.4.*
   - intel-openmp <0.0a0
-  arch: arm64
-  platform: osx
   license: Apache-2.0 WITH LLVM-exception
   license_family: APACHE
   purls: []
@@ -614,8 +546,6 @@ packages:
   - python >=3.14,<3.15.0a0
   - python_abi 3.14.* *_cp314
   - tornado >=5
-  arch: arm64
-  platform: osx
   license: PSF-2.0
   license_family: PSF
   purls: []
@@ -644,8 +574,6 @@ packages:
   - python-dateutil >=2.7
   - python_abi 3.14.* *_cp314
   - qhull >=2020.2,<2020.3.0a0
-  arch: arm64
-  platform: osx
   license: PSF-2.0
   license_family: PSF
   purls:
@@ -681,8 +609,6 @@ packages:
   md5: 068d497125e4bf8a66bf707254fff5ae
   depends:
   - __osx >=11.0
-  arch: arm64
-  platform: osx
   license: X11 AND BSD-3-Clause
   purls: []
   size: 797030
@@ -701,8 +627,6 @@ packages:
   - libblas >=3.9.0,<4.0a0
   constrains:
   - numpy-base <0a0
-  arch: arm64
-  platform: osx
   license: BSD-3-Clause
   license_family: BSD
   purls:
@@ -718,8 +642,6 @@ packages:
   - libpng >=1.6.50,<1.7.0a0
   - libtiff >=4.7.1,<4.8.0a0
   - libzlib >=1.3.1,<2.0a0
-  arch: arm64
-  platform: osx
   license: BSD-2-Clause
   license_family: BSD
   purls: []
@@ -731,8 +653,6 @@ packages:
   depends:
   - __osx >=11.0
   - ca-certificates
-  arch: arm64
-  platform: osx
   license: Apache-2.0
   license_family: Apache
   purls: []
@@ -768,8 +688,6 @@ packages:
   - lcms2 >=2.17,<3.0a0
   - python_abi 3.14.* *_cp314
   - libxcb >=1.17.0,<2.0a0
-  arch: arm64
-  platform: osx
   license: HPND
   purls:
   - pkg:pypi/pillow?source=hash-mapping
@@ -780,8 +698,6 @@ packages:
   md5: 415816daf82e0b23a736a069a75e9da7
   depends:
   - __osx >=11.0
-  arch: arm64
-  platform: osx
   license: MIT
   license_family: MIT
   purls: []
@@ -819,8 +735,6 @@ packages:
   - tk >=8.6.13,<8.7.0a0
   - tzdata
   - zstd >=1.5.7,<1.6.0a0
-  arch: arm64
-  platform: osx
   license: Python-2.0
   purls: []
   size: 13590581
@@ -856,8 +770,6 @@ packages:
   depends:
   - __osx >=11.0
   - libcxx >=16
-  arch: arm64
-  platform: osx
   license: LicenseRef-Qhull
   purls: []
   size: 516376
@@ -867,8 +779,6 @@ packages:
   md5: 63ef3f6e6d6d5c589e64f11263dc5676
   depends:
   - ncurses >=6.5,<7.0a0
-  arch: arm64
-  platform: osx
   license: GPL-3.0-only
   license_family: GPL
   purls: []
@@ -945,8 +855,6 @@ packages:
   depends:
   - __osx >=11.0
   - libzlib >=1.3.1,<2.0a0
-  arch: arm64
-  platform: osx
   license: TCL
   license_family: BSD
   purls: []
@@ -960,8 +868,6 @@ packages:
   - python >=3.14.0rc2,<3.15.0a0
   - python >=3.14.0rc2,<3.15.0a0 *_cp314
   - python_abi 3.14.* *_cp314
-  arch: arm64
-  platform: osx
   license: Apache-2.0
   license_family: Apache
   purls:
@@ -983,8 +889,6 @@ packages:
   - python >=3.14.0rc2,<3.15.0a0
   - python >=3.14.0rc2,<3.15.0a0 *_cp314
   - python_abi 3.14.* *_cp314
-  arch: arm64
-  platform: osx
   license: Apache-2.0
   license_family: Apache
   purls:
@@ -999,8 +903,6 @@ packages:
   - libcxx >=19
   constrains:
   - __osx >=11.0
-  arch: arm64
-  platform: osx
   license: Apache-2.0 OR MIT
   purls: []
   size: 14810041
@@ -1010,8 +912,6 @@ packages:
   md5: 50901e0764b7701d8ed7343496f4f301
   depends:
   - __osx >=11.0
-  arch: arm64
-  platform: osx
   license: MIT
   license_family: MIT
   purls: []
@@ -1022,8 +922,6 @@ packages:
   md5: 77c447f48cab5d3a15ac224edb86a968
   depends:
   - __osx >=11.0
-  arch: arm64
-  platform: osx
   license: MIT
   license_family: MIT
   purls: []
@@ -1035,8 +933,6 @@ packages:
   depends:
   - __osx >=11.0
   - libcxx >=19
-  arch: arm64
-  platform: osx
   license: Zlib
   license_family: Other
   purls: []
@@ -1048,8 +944,6 @@ packages:
   depends:
   - __osx >=11.0
   - libzlib >=1.3.1,<2.0a0
-  arch: arm64
-  platform: osx
   license: BSD-3-Clause
   license_family: BSD
   purls: []
