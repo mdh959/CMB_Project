@@ -1,0 +1,27 @@
+name: docbuild
+
+on:
+  push:
+    branches: ['master']
+  pull_request:
+    
+jobs:
+  main:
+    runs-on: ubuntu-latest
+    steps: 
+      - name: checkout
+        uses: actions/checkout@v2
+      - name: docker-build
+        uses: docker/build-push-action@v1.0.1
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+          repository: marius311/cmblensing.jl
+          build_args: PACKAGECOMPILE=0
+          tag_with_ref: true
+      # - name: docker-build-placeholder
+      #   run: docker pull marius311/cmblensing.jl:latest
+      - name: docs-build
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # For authentication with GitHub Actions token
+        run: .github/workflows/docbuild.sh
