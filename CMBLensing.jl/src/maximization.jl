@@ -266,7 +266,7 @@ function MAP_marg(
 
     dsθ = ds(θ)
     dsθ.G = I # MAP_marg is invariant to G so avoid wasted computation
-    set_distributed_dataset(dsθ)
+    CMBLensing.@distributed dsθ
     @unpack Cϕ, Nϕ, d, Cf, Cn, L = dsθ
     Hϕ⁻¹ = pinv(pinv(Cϕ) + pinv(Nϕ))
     T = real(eltype(d))
@@ -335,9 +335,6 @@ function MAP_marg(
         push!(tr, (;step, g, ϕ))
         
     end
-
-    set_distributed_dataset(nothing) # free memory
-    
     return ϕ, tr
 
 end
