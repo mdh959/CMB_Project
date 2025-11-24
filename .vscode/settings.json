@@ -1,3 +1,6 @@
 {
-    "julia.environmentPath": "/Users/megdearden-hellawell/Documents/Physics Part III/CMB_Project2/CMBLensing.jl"
+    "julia.additionalEnvironments": [
+        "/Users/megdearden-hellawell/.julia/environments/CMBLensing2"
+    ],
+    "julia.environmentPath": "/Users/megdearden-hellawell/.julia/environments/CMBLensing2"
 }
