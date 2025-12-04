@@ -2,12 +2,12 @@ using FFTW
 using CMBLensing: Cℓs, m_rfft, m_irfft, Map
 using Statistics: mean
 
-function grad_fft_local(T; θpix = 0.7438046)
+function grad_fft_local(T)
     m = Map(T)
     proj = m.proj
     Ny, Nx = size(m.arr)
     g = m.arr
-
+    θpix = 0.74  # arcmin
     θpix_rad = θpix * (π/180) / 60
 
     F = m_rfft(g, (1,2))

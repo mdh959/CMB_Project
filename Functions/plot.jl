@@ -1,10 +1,9 @@
 using Statistics
 using PythonPlot
 using CMBLensing
-using ..Utils: grad_fft_local
 
 function plot_grad_T_lensed(f̃)
-    dTdx, dTdy, grad_mag = grad_fft_local(f, θpix =0.74)
+    dTdx, dTdy, grad_mag = grad_fft_local(f̃)
 
     lo = quantile(vec(grad_mag), 0.2)
     hi = quantile(vec(grad_mag), 0.8)
@@ -31,7 +30,7 @@ end
 
 function compare_gradT_phi_errors(f, ϕ, ϕJ, ϕmarg, ϕqe)
     # 1. Compute |∇T|
-    _, _, gradT = grad_fft_local(f, θpix =0.74)
+    _, _, gradT = grad_fft_local(f)
     gradT = gradT ./ maximum(gradT)   # normalise 0–1 for better contrast
     
     # 2. φ residuals in μK
@@ -120,9 +119,9 @@ end
 
 Plots mean |Δϕ| vs |∇T| per-pixel for each estimator.
 """
-function plot_phi_error_vs_gradT(f̃, Δϕ_QE, Δϕ_J, Δϕ_marg)
+function plot_phi_error_vs_gradT(f, Δϕ_QE, Δϕ_J, Δϕ_marg)
     # gradient magnitude per pixel (µK per pixel)
-    _, _, grad_mag = grad_fft_local(f, θpix =0.74)          # |∇T| per rad
+    _, _, grad_mag = grad_fft_local(f)          # |∇T| per rad
     grad_pix = grad_mag 
     
     # absolute φ errors, mod-squared
