@@ -1,95 +1,87 @@
 using FFTW
-using CMBLensing: Cℓs, m_rfft, Map
+using CMBLensing: Cℓs, m_rfft, m_irfft, Map
 using Statistics: mean
 
+function grad_fft_local(T; θpix = 0.7438046)
+    m = Map(T)
+    proj = m.proj
+    Ny, Nx = size(m.arr)
+    g = m.arr
+
+    θpix_rad = θpix * (π/180) / 60
+
+    F = m_rfft(g, (1,2))
+    NyF, NxF = size(F)
+
+    ℓx = proj.ℓx[1:NxF]
+    ℓy = proj.ℓy[1:NyF]
+
+    ℓx2D = repeat(ℓx', NyF, 1)
+    ℓy2D = repeat(ℓy , 1, NxF)
+
+    dTdx = m_irfft((im .* ℓx2D) .* F, Ny, (1,2)) * θpix_rad
+    dTdy = m_irfft((im .* ℓy2D) .* F, Ny, (1,2)) * θpix_rad
+
+    grad_mag = sqrt.(dTdx.^2 .+ dTdy.^2)
+    return dTdx, dTdy, grad_mag
+end
 
 """
-    get_Cℓ_fft(ϕ1, ϕ2=ϕ1; nbins=300)
-
-Compute the auto / cross power spectrum C_ℓ(ϕ1,ϕ2) on a flat-sky
-Lambert map using FFTs. Returns a `Cℓs(ℓ, Cℓ)` object.
+    get_Cℓ_fft
 """
 function get_Cℓ_fft(ϕ1, ϕ2=ϕ1; nbins=300)
-
-    # Real-space maps (Ny×Nx) and projection metadata
     m1 = Map(ϕ1)
     m2 = Map(ϕ2)
 
     a = m1.arr
     b = m2.arr
+
     Ny, Nx = size(a)
-    @assert size(b) == (Ny, Nx)
+    proj = m1.proj
+    θpix_rad = proj.θpix * (π/180)/60
 
-    proj = m1.proj              # ProjLambert
-    θpix_rad = proj.θpix * (π/180) / 60   # arcmin → radians
-
-    # --- FFTs (rfft keeps only independent half-plane) ---
     F1 = m_rfft(a, (1,2))
     F2 = m_rfft(b, (1,2))
-    NyF, NxF = size(F1)
 
-    # Cross spectrum in Fourier space
     Pk = real.(F1 .* conj.(F2))
+    Pk ./= Ny*Nx*θpix_rad^2
 
-    # Normalise to power per steradian
-    area_sr = Nx * Ny * θpix_rad^2
-    Pk ./= area_sr
-
-    # --- Build ℓ grid matching rfft layout ---
-    # proj.ℓx, proj.ℓy are 1D arrays; keep the parts actually present in F1
+    NyF, NxF = size(F1)
     ℓx = proj.ℓx[1:NxF]
     ℓy = proj.ℓy[1:NyF]
 
-    ℓx2D = repeat(ℓx', NyF, 1)
-    ℓy2D = repeat(ℓy , 1,  NxF)
-    ℓmap = @. sqrt(ℓx2D^2 + ℓy2D^2)
+    ℓmap = @. sqrt((ℓx')^2 + ℓy^2)
 
-    # --- Radial binning in ℓ ---
     ℓmin, ℓmax = minimum(ℓmap), maximum(ℓmap)
     edges = range(ℓmin, ℓmax; length=nbins+1)
 
-    Cℓ  = zeros(Float64, nbins)
-    ℓc  = zeros(Float64, nbins)
+    Cs  = zeros(nbins)
+    ℓc  = zeros(nbins)
 
     for i in 1:nbins
-        mask = (edges[i] .<= ℓmap .< edges[i+1])   # BitMatrix NyF×NxF
+        mask = (edges[i] .<= ℓmap .< edges[i+1])
         if any(mask)
-            vals = Pk[mask]
-            Cℓ[i] = mean(vals)
+            Cs[i] = mean(Pk[mask])
             ℓc[i] = mean(ℓmap[mask])
         else
-            Cℓ[i] = NaN
-            ℓc[i] = (edges[i] + edges[i+1]) / 2
+            ℓc[i] = (edges[i] + edges[i+1])/2
+            Cs[i] = NaN
         end
     end
 
-    return Cℓs(ℓc, Cℓ)
+    return Cℓs(ℓc, Cs)
 end
 
 function bin_spectrum(ells, vals; ΔL=300)
-    # Define bin edges
-    Lmin = minimum(ells)
-    Lmax = maximum(ells)
+    Lmin, Lmax = minimum(ells), maximum(ells)
     edges = collect(Lmin:ΔL:Lmax)
+    centers = @. 0.5*(edges[1:end-1] + edges[2:end])
 
-    # Bin centres
-    centers = 0.5 .* (edges[1:end-1] .+ edges[2:end])
-
-    # Output array (same length as centres)
     binned = similar(centers)
-
-    # Loop over bins
     for i in eachindex(centers)
-        m = (ells .>= edges[i]) .& (ells .< edges[i+1])
-
-        if any(m)
-            binned[i] = mean(vals[m])
-        else
-            binned[i] = NaN
-        end
+        mask = (ells .>= edges[i]) .& (ells .< edges[i+1])
+        binned[i] = any(mask) ? mean(vals[mask]) : NaN
     end
 
     return centers, binned
 end
-
-
