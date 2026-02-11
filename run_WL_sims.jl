@@ -1,6 +1,6 @@
 #!/usr/bin/env julia
 """
-Standalone script to compute empirical W_L via Monte Carlo simulations.
+Script to compute empirical W_L via Monte Carlo simulations.
 
 Usage:
     julia run_WL_sims.jl
@@ -28,8 +28,8 @@ Cℓn = noiseCℓs(μKarcminT=1.0, ℓknee=0)
 θpix  = 0.7438046267475303
 Nside = 512
 pol   = :I
-T     = Float64          # overridden to Float64 inside the function anyway
-bandpass_mask = LowPass(1000)
+T     = Float64          
+bandpass_mask = LowPass(6000)
 
 nsims = 100
 nbins = 300
