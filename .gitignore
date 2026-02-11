@@ -8,4 +8,5 @@ venv/
 *.tar
 *.npy
 data/
+*_phis.jld2
 

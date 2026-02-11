@@ -111,6 +111,12 @@ function empirical_WL_maps_loadsim(
     W_marg_running   = nothing
     W_qe_running     = nothing
 
+    # Storage for individual phi maps (Float64, Nside×Nside each)
+    ϕ_true_all  = Vector{Matrix{Float64}}()
+    ϕ_qe_all    = Vector{Matrix{Float64}}()
+    ϕ_joint_all = Vector{Matrix{Float64}}()
+    ϕ_marg_all  = Vector{Matrix{Float64}}()
+
     # Running sums for mean error maps (Float64 to avoid truncation)
     sum_Δϕ²_joint = zeros(Float64, Nside, Nside)
     sum_Δϕ²_marg  = zeros(Float64, Nside, Nside)
@@ -126,6 +132,11 @@ function empirical_WL_maps_loadsim(
         try @load checkpoint_file R_qe_sims W_qe_running catch end
         try @load checkpoint_file sum_Δϕ²_joint sum_Δϕ²_marg sum_Δϕ²_qe nsims_completed catch end
         if R_qe_sims === nothing; R_qe_sims = Vector{Vector{Float64}}() end
+        # Load phi maps from separate file if it exists
+        phi_file = replace(checkpoint_file, ".jld2" => "_phis.jld2")
+        if isfile(phi_file)
+            try @load phi_file ϕ_true_all ϕ_qe_all ϕ_joint_all ϕ_marg_all catch end
+        end
         start_from = length(R_joint_sims) + 1
         nsims_completed = length(R_joint_sims)
         println("→ Starting from simulation $start_from")
@@ -201,13 +212,23 @@ function empirical_WL_maps_loadsim(
         sum_Δϕ²_qe    .+= Δϕ_qe    .^ 2
         nsims_completed += 1
 
+        # Store individual phi maps
+        push!(ϕ_true_all,  Float64.(Map(ϕ).arr))
+        push!(ϕ_qe_all,    Float64.(Map(ϕqe).arr))
+        push!(ϕ_joint_all, Float64.(Map(ϕ_joint).arr))
+        push!(ϕ_marg_all,  Float64.(Map(ϕ_marg).arr))
+
         # Running averages
         W_joint_running = mean(reduce(hcat, R_joint_sims); dims=2)[:]
         W_marg_running  = mean(reduce(hcat, R_marg_sims);  dims=2)[:]
         W_qe_running    = mean(reduce(hcat, R_qe_sims);    dims=2)[:]
 
-        # Checkpoint
+        # Checkpoint (W_L stats only — small file, safe to push)
         @save checkpoint_file R_joint_sims R_marg_sims R_qe_sims ℓ_template W_joint_running W_marg_running W_qe_running sum_Δϕ²_joint sum_Δϕ²_marg sum_Δϕ²_qe nsims_completed
+
+        # Save phi maps separately (large file — keep on cluster, don't push)
+        phi_file = replace(checkpoint_file, ".jld2" => "_phis.jld2")
+        @save phi_file ϕ_true_all ϕ_qe_all ϕ_joint_all ϕ_marg_all
         println("  Saved checkpoint after sim $s  ($nsims_completed completed)")
     end
 
