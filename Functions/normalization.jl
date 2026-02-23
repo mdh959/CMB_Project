@@ -189,10 +189,10 @@ function empirical_WL_maps_loadsim(
         end
 
         # Cross-spectra ratios for W_L
-        cl_tj = get_Cℓ_fft(ϕ, ϕ_joint; nbins=nbins)
-        cl_tm = get_Cℓ_fft(ϕ, ϕ_marg;  nbins=nbins)
-        cl_tq = get_Cℓ_fft(ϕ, ϕqe;     nbins=nbins)
-        cl_tt = get_Cℓ_fft(ϕ, ϕ_true;   nbins=nbins)
+        cl_tj = get_Cℓ(ϕ, ϕ_joint; nbins=nbins)
+        cl_tm = get_Cℓ(ϕ, ϕ_marg;  nbins=nbins)
+        cl_tq = get_Cℓ(ϕ, ϕqe;     nbins=nbins)
+        cl_tt = get_Cℓ(ϕ, ϕ_true;   nbins=nbins)
 
         if ℓ_template === nothing
             ℓ_template = cl_tt.ℓ
@@ -201,22 +201,6 @@ function empirical_WL_maps_loadsim(
         push!(R_joint_sims, cl_tj.Cℓ ./ cl_tt.Cℓ)
         push!(R_marg_sims,  cl_tm.Cℓ ./ cl_tt.Cℓ)
         push!(R_qe_sims,    cl_tq.Cℓ ./ cl_tt.Cℓ)
-
-        # Accumulate mean squared error maps (in Float64)
-        Δϕ_joint = Float64.((Map(ϕ) - Map(ϕ_joint)).arr)
-        Δϕ_marg  = Float64.((Map(ϕ) - Map(ϕ_marg)).arr)
-        Δϕ_qe    = Float64.((Map(ϕ) - Map(ϕqe)).arr)
-
-        sum_Δϕ²_joint .+= Δϕ_joint .^ 2
-        sum_Δϕ²_marg  .+= Δϕ_marg  .^ 2
-        sum_Δϕ²_qe    .+= Δϕ_qe    .^ 2
-        nsims_completed += 1
-
-        # Store individual phi maps
-        push!(ϕ_true_all,  Float64.(Map(ϕ).arr))
-        push!(ϕ_qe_all,    Float64.(Map(ϕqe).arr))
-        push!(ϕ_joint_all, Float64.(Map(ϕ_joint).arr))
-        push!(ϕ_marg_all,  Float64.(Map(ϕ_marg).arr))
 
         # Running averages
         W_joint_running = mean(reduce(hcat, R_joint_sims); dims=2)[:]
@@ -245,6 +229,69 @@ function empirical_WL_maps_loadsim(
         mean_Δϕ²_marg  = mean_Δϕ²_marg,
         mean_Δϕ²_qe    = mean_Δϕ²_qe,
         nsims = nsims_completed,
+    )
+end
+
+function empirical_WL_qe_loadsim(
+    Cℓ, Cℓn, θpix, T, Nside, pol, bandpass_mask;
+    nsims=50, nbins=300,
+    checkpoint_file="results/WL_checkpoint_qe.jld2"
+)
+    # Always run sims in Float64 for numerical stability
+    T = Float64
+
+    R_qe_sims    = Vector{Vector{Float64}}()
+    ℓ_template   = nothing
+    W_qe_running = nothing
+
+    # Resume from checkpoint if available
+    start_from = 1
+    if isfile(checkpoint_file)
+        println("Resuming from checkpoint: $checkpoint_file")
+        @load checkpoint_file R_qe_sims ℓ_template W_qe_running
+        start_from = length(R_qe_sims) + 1
+        println("→ Starting from simulation $start_from")
+    end
+
+    for s in start_from:nsims
+        println("→ Simulation $s / $nsims")
+
+        (; f, f̃, ϕ, ds) = load_sim(
+            seed=1000 + s,
+            Cℓ=Cℓ, Cℓn=Cℓn,
+            θpix=θpix, T=T, Nside=Nside,
+            beamFWHM=1.0, pol=pol,
+            bandpass_mask=bandpass_mask,
+            pixel_mask_kwargs=(edge_padding_deg=0, apodization_deg=0, num_ptsrcs=0),
+        )
+
+        ϕ_true = Map(ϕ)
+
+        # QE (Wiener-filtered)
+        qe  = quadratic_estimate(ds; weights=:lensed, wiener_filtered=true)
+        ϕqe = qe.ϕqe
+
+        # Cross-spectrum ratio for W_L (QE)
+        cl_tq = get_Cℓ_fft(ϕ, ϕqe;    nbins=nbins)
+        cl_tt = get_Cℓ_fft(ϕ, ϕ_true; nbins=nbins)
+
+        if ℓ_template === nothing
+            ℓ_template = cl_tt.ℓ
+        end
+
+        push!(R_qe_sims, cl_tq.Cℓ ./ (cl_tt.Cℓ .+ eps(Float64)))
+
+        # Running average
+        W_qe_running = mean(reduce(hcat, R_qe_sims); dims=2)[:]
+
+        # Checkpoint
+        @save checkpoint_file R_qe_sims ℓ_template W_qe_running
+    end
+
+    return (
+        ℓ     = ℓ_template,
+        WL_qe = W_qe_running,
+        nsims = length(R_qe_sims),
     )
 end
 

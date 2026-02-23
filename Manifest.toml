@@ -181,6 +181,7 @@ version = "4.6.2+0"
 [[deps.CMBLensing]]
 deps = ["AbstractFFTs", "Adapt", "Bijections", "ChainRules", "CodecZlib", "Combinatorics", "ComponentArrays", "CompositeStructs", "CoordinateTransformations", "DataStructures", "DelimitedFiles", "Distributed", "Distributions", "EllipsisNotation", "FFTW", "FileIO", "Formatting", "ForwardDiff", "Healpix", "ImageFiltering", "ImageMorphology", "Images", "InteractiveUtils", "Interpolations", "IterTools", "JLD2", "KahanSummation", "Lazy", "Libdl", "LinearAlgebra", "Loess", "MCMCDiagnosticTools", "MacroTools", "Markdown", "Match", "Measurements", "Memoization", "NFFT", "NamedTupleTools", "Optim", "PDMats", "Pkg", "PlotUtils", "PrecompileTools", "Preferences", "Printf", "ProgressMeter", "QuadGK", "Random", "RecipesBase", "Requires", "Roots", "Rotations", "Serialization", "Setfield", "SparseArrays", "StaticArrays", "Statistics", "StatsBase", "TimerOutputs", "Tullio", "UnPack", "Zygote"]
 git-tree-sha1 = "7a2b4c8ef70904920542b65927759e81338036c5"
+pinned = true
 uuid = "b60c06c0-7e54-11e8-3788-4bd722d65317"
 version = "0.10.1"
 
@@ -761,6 +762,7 @@ version = "1.0.0"
 [[deps.JLD2]]
 deps = ["FileIO", "MacroTools", "Mmap", "OrderedCollections", "PrecompileTools", "Requires", "TranscodingStreams"]
 git-tree-sha1 = "d2091f3a374453c3873940dc1594417e6a5ebec6"
+pinned = true
 uuid = "033835bb-8acc-5ee8-8aae-3f567f8a3819"
 version = "0.4.55"
 

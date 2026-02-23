@@ -33,7 +33,7 @@ bandpass_mask = LowPass(6000)
 
 nsims = 100
 nbins = 300
-checkpoint_file = "results/WL_checkpoint64.jld2"
+checkpoint_file = "results/WL_checkpoint.jld2"
 
 # ── Run ─────────────────────────────────────────────────────────
 println("Starting empirical W_L computation ($nsims sims, Float64)")

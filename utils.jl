@@ -10,10 +10,14 @@ export grad_fft
 
 # ── Normalization (analytical + empirical W_L) ──
 export compute_RL_iterative, compute_WL, compute_WL_analytical
-export empirical_WL_maps_loadsim
+export empirical_WL_maps_loadsim, empirical_WL_qe_loadsim
 
 # ── Debiasing ──
 export debias_phi_with_WL
+
+# ── Error analysis ──
+export run_error_analysis, plot_noise_curves, save_error_results
+export run_error_analysis_qe, plot_noise_curves_qe, save_error_results_qe
 
 # ── I/O ──
 export save_results
@@ -28,6 +32,7 @@ include("Functions/spectra.jl")
 include("Functions/gradient.jl")
 include("Functions/normalization.jl")
 include("Functions/debias.jl")
+include("Functions/error_mean.jl")
 include("Functions/io.jl")
 include("Functions/plotting.jl")
 

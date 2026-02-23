@@ -39,52 +39,63 @@ end
 
 Six-panel comparison: |∇T|, φ_true, and φ residuals for QE / joint / marg.
 """
-function compare_gradT_phi_errors(f, ϕ, ϕJ, ϕmarg, ϕqe)
-    _, _, gradT = grad_fft(f)
-    gradT = gradT ./ maximum(gradT)
+function plot_phi_error_vs_gradT(f, mean_Δϕ²_qe::Matrix, mean_Δϕ²_joint::Matrix, mean_Δϕ²_marg::Matrix;
+                                 nbins=20, min_count=10)
+    _, _, grad_mag = grad_fft(f)
 
-    Δϕ_QE   = Float64.((Map(ϕ) - Map(ϕqe)).arr)
-    Δϕ_J    = Float64.((Map(ϕ) - Map(ϕJ)).arr)
-    Δϕ_marg = Float64.((Map(ϕ) - Map(ϕmarg)).arr)
-    ϕ_true  = Float64.(Map(ϕ).arr)
+    cen, m_QE,   s_QE,   n_QE   = bin_stat_err(Float64.(grad_mag), mean_Δϕ²_qe;   nbins=nbins)
+    _,   m_J,    s_J,    n_J    = bin_stat_err(Float64.(grad_mag), mean_Δϕ²_joint; nbins=nbins)
+    _,   m_marg, s_marg, n_marg = bin_stat_err(Float64.(grad_mag), mean_Δϕ²_marg;  nbins=nbins)
 
-    scale = 1e6
-    dQE   = scale .* Δϕ_QE
-    dJ    = scale .* Δϕ_J
-    dMarg = scale .* Δϕ_marg
-    dTrue = scale .* ϕ_true
+    ok_QE   = n_QE   .>= min_count
+    ok_J    = n_J    .>= min_count
+    ok_marg = n_marg .>= min_count
 
-    m = maximum(abs.([dQE; dJ; dMarg]))
-    lo, hi = -m, m
+    plt.rc("font",   size=12, family="serif")
+    plt.rc("axes",   linewidth=0.8)
+    plt.rc("xtick",  direction="in", top=true)
+    plt.rc("ytick",  direction="in", right=true)
+    plt.rc("xtick.major", width=0.8, size=4)
+    plt.rc("ytick.major", width=0.8, size=4)
 
-    plt.figure(figsize=(14, 7))
+    colours = ["#4477AA", "#EE6677", "#228833"]
 
-    plt.subplot(2, 3, 1)
-    plt.imshow(gradT, cmap="inferno")
-    plt.title(L"|\nabla T|" * " (normalised)")
-    plt.colorbar()
+    fig, (ax_top, ax_bot) = plt.subplots(2, 1, figsize=(5.5, 5.5),
+        gridspec_kw=Dict("height_ratios" => [3, 1], "hspace" => 0.08),
+        sharex=true)
 
-    plt.subplot(2, 3, 2)
-    plt.imshow(dQE, cmap="RdBu_r", vmin=lo, vmax=hi)
-    plt.title(L"\phi_\mathrm{true} - \phi_\mathrm{QE}")
-    plt.colorbar()
+    # ── Top panel: |Δϕ|² vs |∇T| ──
+    for (ok, m, s, col, lab, mk) in [
+        (ok_QE,   m_QE,   s_QE,   colours[1], "QE",        "o"),
+        (ok_J,    m_J,    s_J,    colours[2], "Joint MAP",  "s"),
+        (ok_marg, m_marg, s_marg, colours[3], "MAP marg",   "^"),
+    ]
+        c, μ, σ = cen[ok], m[ok], s[ok]
+        ax_top.plot(c, μ, marker=mk, color=col, label=lab,
+                markersize=4, linewidth=1.2, markeredgewidth=0.6, markeredgecolor="white")
+        ax_top.fill_between(c, μ .- σ, μ .+ σ, alpha=0.2, color=col)
+    end
 
-    plt.subplot(2, 3, 3)
-    plt.imshow(dJ, cmap="RdBu_r", vmin=lo, vmax=hi)
-    plt.title(L"\phi_\mathrm{true} - \phi_\mathrm{joint}")
-    plt.colorbar()
+    ax_top.set_yscale("log")
+    ax_top.set_ylabel(L"\langle|\Delta\phi|^2\rangle", fontsize=13)
+    ax_top.legend(frameon=false, fontsize=11)
+    ax_top.tick_params(labelsize=11, labelbottom=false)
+    ax_top.spines["top"].set_visible(false)
+    ax_top.spines["right"].set_visible(false)
 
-    plt.subplot(2, 3, 4)
-    plt.imshow(dMarg, cmap="RdBu_r", vmin=lo, vmax=hi)
-    plt.title(L"\phi_\mathrm{true} - \phi_\mathrm{marg}")
-    plt.colorbar()
+    # ── Bottom panel: pixel count histogram ──
+    grad_vec = vec(Float64.(grad_mag))
+    lo, hi = minimum(grad_vec), maximum(grad_vec)
+    hist_edges = range(lo, hi; length=nbins + 1)
 
-    plt.subplot(2, 3, 5)
-    plt.imshow(dTrue, cmap="RdBu_r", vmin=lo, vmax=hi)
-    plt.title(L"\phi_\mathrm{true}")
-    plt.colorbar()
+    ax_bot.hist(grad_vec, bins=collect(hist_edges), color="grey", alpha=0.6, edgecolor="none")
+    ax_bot.set_xlabel(L"|\nabla T|\;\mathrm{(per\;pixel)}", fontsize=13)
+    ax_bot.set_ylabel(L"N_\mathrm{pixels}", fontsize=11)
+    ax_bot.tick_params(labelsize=10)
+    ax_bot.spines["top"].set_visible(false)
+    ax_bot.spines["right"].set_visible(false)
 
-    plt.tight_layout()
+    fig.tight_layout()
 end
 
 """
@@ -93,7 +104,7 @@ end
 Binned mean |Δϕ|² vs |∇T| for each estimator, with 1σ shaded error bands.
 Bins with fewer than `min_count` pixels are excluded.
 """
-function plot_phi_error_vs_gradT(f, ϕ, ϕqe, ϕ_J, ϕ_marg; nbins=20, min_count=10)
+function plot_phi_error_vs_gradT_old(f, ϕ, ϕqe, ϕ_J, ϕ_marg; nbins=20, min_count=10)
     _, _, grad_mag = grad_fft(f)
 
     ΔϕQE   = Float64.((Map(ϕ) - Map(ϕqe)).arr)
@@ -149,16 +160,18 @@ end
 Plot empirical W_L for joint/marg, optionally with analytical QE curve.
 """
 function plot_WL_comparison(
-    ℓ_template, WL_joint, WL_marg;
+    ℓ_template, WL_joint, WL_marg, WL_qe;
     WL_analytical=nothing, ℓ_ana=nothing
 )
     ℓ  = collect(ℓ_template)
     WJ = collect(WL_joint)
     WM = collect(WL_marg)
+    WQ = collect(WL_qe)
 
     plt.figure(figsize=(7, 5))
     plt.plot(ℓ, WJ, label="MAP joint (empirical)")
     plt.plot(ℓ, WM, label="MAP marg (empirical)")
+    plt.plot(ℓ, WQ, label="QE (empirical)")
 
     if WL_analytical !== nothing
         ℓa = ℓ_ana !== nothing ? collect(ℓ_ana) : ℓ
