@@ -10,14 +10,14 @@ export grad_fft
 
 # ── Normalization (analytical + empirical W_L) ──
 export compute_RL_iterative, compute_WL, compute_WL_analytical
-export empirical_WL_maps_loadsim, empirical_WL_qe_loadsim
+export empirical_WL_all_loadsim
 
 # ── Debiasing ──
 export debias_phi_with_WL
 
 # ── Error analysis ──
-export run_error_analysis, plot_noise_curves, save_error_results
-export run_error_analysis_qe, plot_noise_curves_qe, save_error_results_qe
+export run_error_analysis, run_error_analysis_all_debiased, plot_noise_curves, save_error_results
+export run_error_analysis_qe, plot_noise_curves_qe, plot_noise_curves_L4, save_error_results_qe
 
 # ── I/O ──
 export save_results
