@@ -8,6 +8,9 @@ export get_Cℓ_fft, bin_spectrum, bin_stat, bin_stat_err
 # ── Gradient ──
 export grad_fft
 
+# ── Gradient Inversion estimator ──
+export gi_estimate
+
 # ── Normalization (analytical + empirical W_L) ──
 export compute_RL_iterative, compute_WL, compute_WL_analytical
 export empirical_WL_all_loadsim
@@ -30,6 +33,7 @@ export plot_grad_T_lensed, compare_gradT_phi_errors,
 # Include files (order matters: spectra & gradient before plotting)
 include("Functions/spectra.jl")
 include("Functions/gradient.jl")
+include("Functions/gradient_inversion.jl")
 include("Functions/normalization.jl")
 include("Functions/debias.jl")
 include("Functions/error_mean.jl")

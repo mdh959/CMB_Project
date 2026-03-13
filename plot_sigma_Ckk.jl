@@ -147,7 +147,7 @@ for (key, Lc, σ_sim, σ_th) in [("qe",Lc_qe,σ_qe,σ_th_qe),
     any(msk_th) && ax_auto.semilogy(Lc[msk_th], σ_th[msk_th];
         color=colours[key], linestyle="--", linewidth=1.2, alpha=0.7)
 end
-ax_auto.set_xlim(5000, 11000); ax_auto.set_ylim(1e-14, 1e-9)
+ax_auto.set_xlim(3000, 11000); ax_auto.set_ylim(1e-14, 1e-9)
 ax_auto.set_ylabel(L"\sigma[C_L^{\hat{\kappa}\hat{\kappa}}]", fontsize=12)
 ax_auto.legend(loc="upper left", frameon=false, fontsize=9,
     title="solid=empirical, dashed=Knox", title_fontsize=7)
@@ -197,7 +197,7 @@ else
     ax_mean.text(0.5, 0.5, "Cross spectra not available", ha="center", va="center",
                  transform=ax_mean.transAxes, fontsize=10, color="grey")
 end
-ax_mean.set_xlim(5000, 11000)
+ax_mean.set_xlim(3000, 11000)
 ax_mean.set_ylabel(L"\langle C_L^{\kappa\hat{\kappa}_\mathrm{deb}}\rangle", fontsize=12)
 ax_mean.set_xlabel(L"L", fontsize=12)
 ax_mean.spines["top"].set_visible(false); ax_mean.spines["right"].set_visible(false)

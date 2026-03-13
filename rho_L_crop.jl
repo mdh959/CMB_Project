@@ -28,23 +28,21 @@ using .Utils
 
 # ── Inputs ─────────────────────────────────────────────────────────────
 const PHI_FILE     = "results/checkpoints/phi_maps.jld2"
-const RAW_QE_FILE  = "results/checkpoints/phi_maps_raw_qe.jld2"
 
 const θpix   = 0.7438046267475303   # arcmin
 const Nside  = 512
 
 # Patch size: 16px ≈ 0.198°, 24px ≈ 0.298°, 32px ≈ 0.397°
 const N_CROP = 24
-const Δℓ     = 1000
+const Δℓ     = 2000
 
 # Gradient selection (units must match error_mean.jl / Utils.grad_fft)
-# All valid patches with mean |gradT| in [GRAD_BAND_MIN, GRAD_BAND_MAX) are found
-# via a full sliding-window scan of the 512x512 field for every sim.
-# Target gradient band: patch MEAN |gradT| must be in [GRAD_BAND_MIN, GRAD_BAND_MAX).
-# All valid patches across the FULL 512x512 field are collected for every sim.
+# Two bands are compared side by side:
+#   Band A (high gradient):  [13, 14) — top ~15% of field by gradient strength
+#   Band B (medium gradient): [5,  6) — typical/moderate gradient regions
 # From diagnostic stats: p50≈8, p90≈15, p99≈21, max≈35
-const GRAD_BAND_MIN    = 10.0
-const GRAD_BAND_MAX    = 14.0
+
+const BANDS = [(13.0, 14.0), (5.0, 6.0)]
 
 # Within-patch uniformity: std(|gradT|) / mean(|gradT|) must be below this.
 const GRAD_RMS_FRAC_MAX = 0.25
@@ -55,10 +53,10 @@ const N_DEBUG_STATS = 3
 # ── Geometry helpers ─────────────────────────────────────────────────────
 const θpix_rad = θpix * π / 10800
 const L_nyq = π / θpix_rad
-valid_L(ℓ) = ℓ .< 0.85 * L_nyq
+valid_L(ℓ) = ℓ .< 11000
 
 patch_deg = round(N_CROP * θpix / 60; digits=3)
-println("Patch: $(N_CROP)×$(N_CROP)  (~$(patch_deg)°)  |  |gradT| band [$GRAD_BAND_MIN, $GRAD_BAND_MAX), rms/mean<$GRAD_RMS_FRAC_MAX")
+println("Patch: $(N_CROP)×$(N_CROP)  (~$(patch_deg)°)  |  two gradient bands: $(BANDS)  rms/mean<$GRAD_RMS_FRAC_MAX")
 
 # ── Crop helper (by centre pixel) ────────────────────────────────────────
 function crop_center_xy(arr::AbstractMatrix, cx::Int, cy::Int, N::Int)
@@ -69,6 +67,14 @@ function crop_center_xy(arr::AbstractMatrix, cx::Int, cy::Int, N::Int)
     y2 = cy + h
     return arr[y1:y2, x1:x2]  # row=y, col=x
 end
+
+# ── 2D Hann apodization window ───────────────────────────────────────────
+function hann2d(Ny::Int, Nx::Int)
+    wy = 0.5 .* (1 .- cos.(2π .* (0:Ny-1) ./ Ny))
+    wx = 0.5 .* (1 .- cos.(2π .* (0:Nx-1) ./ Nx))
+    return wy .* wx'
+end
+const WIN = hann2d(N_CROP, N_CROP)
 
 # ── Correlation coefficient helper ───────────────────────────────────────
 function rho_from_means(Ctr, Ctt, Crr)
@@ -84,7 +90,7 @@ function make_wrap_small(; θpix, N_CROP)
     sim_ref = load_sim(
         seed=1001, Cℓ=Cℓ, Cℓn=Cℓn,
         θpix=θpix, T=Float64, Nside=N_CROP,
-        beamFWHM=1.0, pol=:I, bandpass_mask=LowPass(8000),
+        beamFWHM=1.0, pol=:I, bandpass_mask=LowPass(6000),
         pixel_mask_kwargs=(edge_padding_deg=0, apodization_deg=0, num_ptsrcs=0)
     )
 
@@ -117,7 +123,7 @@ function find_all_valid_patches(G::AbstractMatrix, N::Int, gmin::Real, gmax::Rea
     end
 
     patches = Tuple{Int,Int,Float64,Float64}[]  # (cx, cy, μ, frac)
-    @inbounds for cy in (1+h):(Ny-h), cx in (1+h):(Nx-h)
+    @inbounds for cy in h:(Ny-h), cx in h:(Nx-h)
         r1, r2 = cy - h + 1, cy + h
         c1, c2 = cx - h + 1, cx + h
         s1 = rect_sum(cs1, r1, r2, c1, c2)
@@ -129,23 +135,6 @@ function find_all_valid_patches(G::AbstractMatrix, N::Int, gmin::Real, gmax::Rea
         push!(patches, (cx, cy, μ, frac))
     end
     return patches
-end
-
-# ── Pre-load raw QE maps (seed → matrix) ────────────────────────────────
-raw_qe_by_seed = Dict{Int,Matrix{Float64}}()
-if isfile(RAW_QE_FILE)
-    jldopen(RAW_QE_FILE, "r") do f
-        for key in keys(f)
-            m = match(r"^sim_(\d+)$", key)
-            if m !== nothing && haskey(f, "$key/seed") && haskey(f, "$key/ϕ_qe_raw")
-                seed = read(f, "$key/seed")
-                raw_qe_by_seed[seed] = Float64.(real.(read(f, "$key/ϕ_qe_raw")))
-            end
-        end
-    end
-    println("Loaded $(length(raw_qe_by_seed)) raw QE maps from $RAW_QE_FILE")
-else
-    @warn "Raw QE file not found: $RAW_QE_FILE — raw QE will be omitted"
 end
 
 # ── Per-sim spectral accumulators (for jackknife over sims) ──────────────────
@@ -162,108 +151,106 @@ struct SimResult
     Σtm :: Vector{Float64}
 end
 
-ℓ_vec      = nothing
-nsims_done  = 0
-sim_results = SimResult[]
+function run_analysis(grad_min::Real, grad_max::Real)
+    sim_results = SimResult[]
+    ℓ_vec = nothing
+    nsims_done = 0
+    dbg_count  = 0
 
-# ── Main loop ─────────────────────────────────────────────────────────
-jldopen(PHI_FILE, "r") do f
-    idxs = sort([parse(Int, m.captures[1])
-        for key in keys(f)
-        for m in [match(r"^sim_(\d+)$", key)]
-        if m !== nothing])
+    jldopen(PHI_FILE, "r") do f
+        idxs = sort([parse(Int, m.captures[1])
+            for key in keys(f)
+            for m in [match(r"^sim_(\d+)$", key)]
+            if m !== nothing])
 
-    dbg_count = 0
+        for s in idxs
+            println("Sim $s  [band $(grad_min)-$(grad_max)]")
 
-    for s in idxs
-        global ℓ_vec, nsims_done
+            ϕ_true_full  = read(f, "sim_$s/ϕ_true")
+            ϕ_qe_full    = read(f, "sim_$s/ϕ_qe")
+            ϕ_joint_full = read(f, "sim_$s/ϕ_joint")
+            ϕ_marg_full  = read(f, "sim_$s/ϕ_marg")
 
-        println("Sim $s")
+            if !haskey(f, "sim_$s/seed")
+                println("  No seed available → skip")
+                continue
+            end
+            seed_s = read(f, "sim_$s/seed")
 
-        ϕ_true_full  = read(f, "sim_$s/ϕ_true")
-        ϕ_qe_full    = read(f, "sim_$s/ϕ_qe")
-        ϕ_joint_full = read(f, "sim_$s/ϕ_joint")
-        ϕ_marg_full  = read(f, "sim_$s/ϕ_marg")
+            # Regenerate unlensed f to compute gradient
+            sim_s = load_sim(seed=seed_s,
+                             Cℓ=camb(r=0.05, ℓmax=21000),
+                             Cℓn=noiseCℓs(μKarcminT=1.0, ℓknee=0),
+                             θpix=θpix, T=Float64, Nside=Nside,
+                             beamFWHM=1.0, pol=:I,
+                             bandpass_mask=LowPass(6000),
+                             pixel_mask_kwargs=(edge_padding_deg=0, apodization_deg=0, num_ptsrcs=0))
+            _, _, G_field = Utils.grad_fft(sim_s.f)
+            G = Float64.(G_field)
 
-        if !haskey(f, "sim_$s/seed")
-            println("  No seed available → skip")
-            continue
-        end
-        seed_s = read(f, "sim_$s/seed")
+            nsims_done += 1
 
-        # Regenerate unlensed f to compute gradient
-        sim_s = load_sim(seed=seed_s,
-                         Cℓ=camb(r=0.05, ℓmax=21000),
-                         Cℓn=noiseCℓs(μKarcminT=1.0, ℓknee=0),
-                         θpix=θpix, T=Float64, Nside=Nside,
-                         beamFWHM=1.0, pol=:I,
-                         bandpass_mask=LowPass(8000),
-                         pixel_mask_kwargs=(edge_padding_deg=0, apodization_deg=0, num_ptsrcs=0))
-        _, _, G_field = Utils.grad_fft(sim_s.f)
-        G = Float64.(G_field)
-
-        nsims_done += 1
-
-        if dbg_count < N_DEBUG_STATS
-            dbg_count += 1
-            @printf("  G stats: min=%.3g p50=%.3g p90=%.3g p99=%.3g max=%.3g\n",
-                    minimum(G), quantile(vec(G), 0.50), quantile(vec(G), 0.90),
-                    quantile(vec(G), 0.99), maximum(G))
-        end
-
-        # Find ALL valid patches in the gradient band using sliding-window scan
-        patches = find_all_valid_patches(G, N_CROP, GRAD_BAND_MIN, GRAD_BAND_MAX, GRAD_RMS_FRAC_MAX)
-        if isempty(patches)
-            println("  No valid patches found → skip")
-            continue
-        end
-        @printf("  Found %d valid patches (|gradT| ∈ [%.1f,%.1f), rms/mean<%.2f)\n",
-                length(patches), GRAD_BAND_MIN, GRAD_BAND_MAX, GRAD_RMS_FRAC_MAX)
-
-        # Accumulate spectral sums over all valid patches in this sim
-        Σtt = Σqq = Σtq = Σjj = Σtj = Σmm = Σtm = nothing
-
-        for (cx, cy, gμ, gfrac) in patches
-            ϕt = wrap_small(crop_center_xy(ϕ_true_full,  cx, cy, N_CROP))
-            ϕq = wrap_small(crop_center_xy(ϕ_qe_full,    cx, cy, N_CROP))
-            ϕj = wrap_small(crop_center_xy(ϕ_joint_full, cx, cy, N_CROP))
-            ϕm = wrap_small(crop_center_xy(ϕ_marg_full,  cx, cy, N_CROP))
-
-            cl = get_Cℓ(ϕt; Δℓ=Δℓ)
-            tt = Float64.(cl.Cℓ)
-            ℓ  = Float64.(collect(cl.ℓ))
-            if ℓ_vec === nothing
-                global ℓ_vec = ℓ
+            if dbg_count < N_DEBUG_STATS
+                dbg_count += 1
+                @printf("  G stats: min=%.3g p50=%.3g p90=%.3g p99=%.3g max=%.3g\n",
+                        minimum(G), quantile(vec(G), 0.50), quantile(vec(G), 0.90),
+                        quantile(vec(G), 0.99), maximum(G))
             end
 
-            qq = Float64.(get_Cℓ(ϕq;      Δℓ=Δℓ).Cℓ)
-            jj = Float64.(get_Cℓ(ϕj;      Δℓ=Δℓ).Cℓ)
-            mm = Float64.(get_Cℓ(ϕm;      Δℓ=Δℓ).Cℓ)
-            tq = Float64.(get_Cℓ(ϕt, ϕq; Δℓ=Δℓ).Cℓ)
-            tj = Float64.(get_Cℓ(ϕt, ϕj; Δℓ=Δℓ).Cℓ)
-            tm = Float64.(get_Cℓ(ϕt, ϕm; Δℓ=Δℓ).Cℓ)
+            patches = find_all_valid_patches(G, N_CROP, grad_min, grad_max, GRAD_RMS_FRAC_MAX)
+            if isempty(patches)
+                println("  No valid patches found → skip")
+                continue
+            end
+            @printf("  Found %d valid patches (|gradT| ∈ [%.1f,%.1f), rms/mean<%.2f)\n",
+                    length(patches), grad_min, grad_max, GRAD_RMS_FRAC_MAX)
 
-            Σtt = Σtt === nothing ? tt : Σtt .+ tt
-            Σqq = Σqq === nothing ? qq : Σqq .+ qq
-            Σtq = Σtq === nothing ? tq : Σtq .+ tq
-            Σjj = Σjj === nothing ? jj : Σjj .+ jj
-            Σtj = Σtj === nothing ? tj : Σtj .+ tj
-            Σmm = Σmm === nothing ? mm : Σmm .+ mm
-            Σtm = Σtm === nothing ? tm : Σtm .+ tm
+            Σtt = Σqq = Σtq = Σjj = Σtj = Σmm = Σtm = nothing
+
+            for (cx, cy, gμ, gfrac) in patches
+                ϕt = wrap_small(WIN .* crop_center_xy(ϕ_true_full,  cx, cy, N_CROP))
+                ϕq = wrap_small(WIN .* crop_center_xy(ϕ_qe_full,    cx, cy, N_CROP))
+                ϕj = wrap_small(WIN .* crop_center_xy(ϕ_joint_full, cx, cy, N_CROP))
+                ϕm = wrap_small(WIN .* crop_center_xy(ϕ_marg_full,  cx, cy, N_CROP))
+
+                cl = get_Cℓ(ϕt; Δℓ=Δℓ)
+                tt = Float64.(cl.Cℓ)
+                ℓ  = Float64.(collect(cl.ℓ))
+                if ℓ_vec === nothing
+                    ℓ_vec = ℓ
+                end
+
+                qq = Float64.(get_Cℓ(ϕq;      Δℓ=Δℓ).Cℓ)
+                jj = Float64.(get_Cℓ(ϕj;      Δℓ=Δℓ).Cℓ)
+                mm = Float64.(get_Cℓ(ϕm;      Δℓ=Δℓ).Cℓ)
+                tq = Float64.(get_Cℓ(ϕt, ϕq; Δℓ=Δℓ).Cℓ)
+                tj = Float64.(get_Cℓ(ϕt, ϕj; Δℓ=Δℓ).Cℓ)
+                tm = Float64.(get_Cℓ(ϕt, ϕm; Δℓ=Δℓ).Cℓ)
+
+                Σtt = Σtt === nothing ? tt : Σtt .+ tt
+                Σqq = Σqq === nothing ? qq : Σqq .+ qq
+                Σtq = Σtq === nothing ? tq : Σtq .+ tq
+                Σjj = Σjj === nothing ? jj : Σjj .+ jj
+                Σtj = Σtj === nothing ? tj : Σtj .+ tj
+                Σmm = Σmm === nothing ? mm : Σmm .+ mm
+                Σtm = Σtm === nothing ? tm : Σtm .+ tm
+            end
+
+            push!(sim_results, SimResult(s, length(patches), Σtt, Σqq, Σtq, Σjj, Σtj, Σmm, Σtm))
         end
-
-        push!(sim_results, SimResult(s, length(patches), Σtt, Σqq, Σtq, Σjj, Σtj, Σmm, Σtm))
     end
+
+    n_sims  = length(sim_results)
+    n_total = n_sims > 0 ? sum(r.n_patches for r in sim_results) : 0
+    println("\nBand [$grad_min, $grad_max): processed $nsims_done sims | valid: $n_sims | patches: $n_total")
+    n_sims == 0 && error("No valid patches for band [$grad_min, $grad_max); relax GRAD_RMS_FRAC_MAX.")
+    return sim_results, ℓ_vec
 end
 
-n_sims = length(sim_results)
-n_total = sum(r.n_patches for r in sim_results)
-println("\nProcessed sims: $nsims_done | sims with valid patches: $n_sims | total patches: $n_total")
-n_sims == 0 && error("No valid patches found; relax GRAD_BAND_MIN/MAX or GRAD_RMS_FRAC_MAX.")
+sim_results_A, ℓ_vec_A = run_analysis(BANDS[1]...)
+sim_results_B, ℓ_vec_B = run_analysis(BANDS[2]...)
 
 # ── ρ_L from grand mean spectra + jackknife SEM over sims ────────────────────
-mask = valid_L(ℓ_vec)
-
 function grand_rho(rs, f_cross, f_true, f_recon)
     Σc = sum(getfield(r, f_cross) for r in rs)
     Σt = sum(getfield(r, f_true)  for r in rs)
@@ -280,34 +267,51 @@ function jackknife_sem(rs, f_cross, f_true, f_recon)
     vec(sqrt((n-1)^2 / n) .* std(mat; dims=2))
 end
 
-ρ_q = grand_rho(sim_results, :Σtq, :Σtt, :Σqq)
-ρ_j = grand_rho(sim_results, :Σtj, :Σtt, :Σjj)
-ρ_m = grand_rho(sim_results, :Σtm, :Σtt, :Σmm)
-
-sem_q = jackknife_sem(sim_results, :Σtq, :Σtt, :Σqq)
-sem_j = jackknife_sem(sim_results, :Σtj, :Σtt, :Σjj)
-sem_m = jackknife_sem(sim_results, :Σtm, :Σtt, :Σmm)
-
-fig, ax = PythonPlot.subplots(1, 1; figsize=(6, 4), constrained_layout=true)
-
-for (ρ, sem, col, lab) in [
-    (ρ_q, sem_q, "#D62728", "QE (WF)"),
-    (ρ_j, sem_j, "#1F77B4", "MAP joint"),
-    (ρ_m, sem_m, "#2CA02C", "MAP marg"),
-]
-    m = mask .& isfinite.(ρ)
-    ax.plot(ℓ_vec[m], ρ[m]; color=col, label=lab, linewidth=2)
-    sem !== nothing && ax.fill_between(ℓ_vec[m], (ρ .- sem)[m], (ρ .+ sem)[m]; color=col, alpha=0.2)
+function compute_rhos(sim_results)
+    ρ_q   = grand_rho(sim_results, :Σtq, :Σtt, :Σqq)
+    ρ_j   = grand_rho(sim_results, :Σtj, :Σtt, :Σjj)
+    ρ_m   = grand_rho(sim_results, :Σtm, :Σtt, :Σmm)
+    sem_q = jackknife_sem(sim_results, :Σtq, :Σtt, :Σqq)
+    sem_j = jackknife_sem(sim_results, :Σtj, :Σtt, :Σjj)
+    sem_m = jackknife_sem(sim_results, :Σtm, :Σtt, :Σmm)
+    return ρ_q, ρ_j, ρ_m, sem_q, sem_j, sem_m
 end
 
-ax.axhline(1; color="k", linestyle=":")
-ax.axhline(0; color="k", linestyle="--", linewidth=0.5)
-ax.set_xlabel(L"L")
-ax.set_ylabel(L"\rho_L")
-ax.set_ylim(-0.1, 1.1)
-ax.set_title("rho_L: |gradT| ∈ [$GRAD_BAND_MIN,$GRAD_BAND_MAX), rms/mean<$GRAD_RMS_FRAC_MAX, n=$n_total patches / $n_sims sims",
-             fontsize=8)
-ax.legend(frameon=false)
+ρ_q_A, ρ_j_A, ρ_m_A, sem_q_A, sem_j_A, sem_m_A = compute_rhos(sim_results_A)
+ρ_q_B, ρ_j_B, ρ_m_B, sem_q_B, sem_j_B, sem_m_B = compute_rhos(sim_results_B)
+
+n_sims_A  = length(sim_results_A)
+n_total_A = n_sims_A > 0 ? sum(r.n_patches for r in sim_results_A) : 0
+n_sims_B  = length(sim_results_B)
+n_total_B = n_sims_B > 0 ? sum(r.n_patches for r in sim_results_B) : 0
+
+# ── Plot: side-by-side for the two gradient bands ─────────────────────────────
+fig, (axA, axB) = PythonPlot.subplots(1, 2; figsize=(13.0, 5.5), constrained_layout=true)
+
+function fill_rho_ax(ax, ℓ_vec, ρ_q, ρ_j, ρ_m, sem_q, sem_j, sem_m, band_min, band_max, n_sims, n_total)
+    mask = valid_L(ℓ_vec)
+    for (ρ, sem, col, lab) in [
+        (ρ_q, sem_q, "#D62728", "QE (WF)"),
+        (ρ_j, sem_j, "#1F77B4", "MAP joint"),
+        (ρ_m, sem_m, "#2CA02C", "MAP marg"),
+    ]
+        m = mask .& isfinite.(ρ)
+        ax.plot(ℓ_vec[m], ρ[m]; color=col, label=lab, linewidth=2)
+        sem !== nothing && ax.fill_between(ℓ_vec[m], (ρ .- sem)[m], (ρ .+ sem)[m]; color=col, alpha=0.2)
+    end
+    ax.axhline(1; color="k", linestyle=":")
+    ax.axhline(0; color="k", linestyle="--", linewidth=0.5)
+    ax.set_xlabel(L"L", fontsize=12)
+    ax.set_ylabel(L"\rho_L", fontsize=12)
+    ax.set_ylim(-0.1, 1.1)
+    ax.set_title("|∇T| ∈ [$band_min, $band_max) µK/arcmin  ($n_sims sims, $n_total patches)", fontsize=10, pad=6)
+    ax.legend(frameon=false, fontsize=10)
+end
+
+fill_rho_ax(axA, ℓ_vec_A, ρ_q_A, ρ_j_A, ρ_m_A, sem_q_A, sem_j_A, sem_m_A,
+            BANDS[1][1], BANDS[1][2], n_sims_A, n_total_A)
+fill_rho_ax(axB, ℓ_vec_B, ρ_q_B, ρ_j_B, ρ_m_B, sem_q_B, sem_j_B, sem_m_B,
+            BANDS[2][1], BANDS[2][2], n_sims_B, n_total_B)
 
 outfile = "results/rho_L_gradpatch_$(N_CROP)px.png"
 fig.savefig(outfile, dpi=150)

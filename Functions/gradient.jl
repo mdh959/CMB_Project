@@ -13,8 +13,6 @@ function grad_fft(field)
     Ny, Nx = size(m.arr)
     g = m.arr
 
-    θpix_rad = proj.θpix * (π / 180) / 60
-
     F = m_rfft(g, (1, 2))
     NyF, NxF = size(F)
 
@@ -24,8 +22,8 @@ function grad_fft(field)
     ℓx2D = repeat(ℓx', NyF, 1)
     ℓy2D = repeat(ℓy, 1, NxF)
 
-    dTdx = m_irfft((im .* ℓx2D) .* F, Ny, (1, 2)) * θpix_rad
-    dTdy = m_irfft((im .* ℓy2D) .* F, Ny, (1, 2)) * θpix_rad
+    dTdx = m_irfft((im .* ℓx2D) .* F, Ny, (1, 2))
+    dTdy = m_irfft((im .* ℓy2D) .* F, Ny, (1, 2))
 
     grad_mag = sqrt.(dTdx .^ 2 .+ dTdy .^ 2)
 

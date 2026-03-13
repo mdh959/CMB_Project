@@ -1,0 +1,212 @@
+  Activating project at `~/Documents/Physics Part III/CMB_Project`
+┌ Info: CondaPkg: Waiting for lock to be freed. You may delete this file if no other process is resolving.
+└   lock_file = "/Users/megdearden-hellawell/Documents/Physics Part III/CMB_Project/.CondaPkg/lock"
+ERROR: LoadError: No valid patches for band [13.0, 14.0); relax GRAD_RMS_FRAC_MAX.
+Stacktrace:
+ [1] error(s::String)
+   @ Base ./error.jl:35
+ [2] run_analysis(grad_min::Float64, grad_max::Float64)
+   @ Main ~/Documents/Physics Part III/CMB_Project/rho_L_crop.jl:246
+ [3] top-level scope
+   @ ~/Documents/Physics Part III/CMB_Project/rho_L_crop.jl:250
+in expression starting at /Users/megdearden-hellawell/Documents/Physics Part III/CMB_Project/rho_L_crop.jl:250
+Patch: 24×24  (~0.298°)  |  two gradient bands: [(13.0, 14.0), (5.0, 6.0)]  rms/mean<0.25
+Sim 1  [band 13.0-14.0]
+  G stats: min=39.1 p50=3.76e+04 p90=6.88e+04 p99=9.76e+04 max=1.65e+05
+  No valid patches found → skip
+Sim 2  [band 13.0-14.0]
+  G stats: min=63.9 p50=3.73e+04 p90=6.82e+04 p99=9.62e+04 max=1.34e+05
+  No valid patches found → skip
+Sim 3  [band 13.0-14.0]
+  G stats: min=34.6 p50=3.75e+04 p90=6.79e+04 p99=9.54e+04 max=1.38e+05
+  No valid patches found → skip
+Sim 5  [band 13.0-14.0]
+  No valid patches found → skip
+Sim 6  [band 13.0-14.0]
+  No valid patches found → skip
+Sim 7  [band 13.0-14.0]
+  No valid patches found → skip
+Sim 8  [band 13.0-14.0]
+  No valid patches found → skip
+Sim 9  [band 13.0-14.0]
+  No valid patches found → skip
+Sim 10  [band 13.0-14.0]
+  No valid patches found → skip
+Sim 11  [band 13.0-14.0]
+  No valid patches found → skip
+Sim 12  [band 13.0-14.0]
+  No valid patches found → skip
+Sim 13  [band 13.0-14.0]
+  No valid patches found → skip
+Sim 14  [band 13.0-14.0]
+  No valid patches found → skip
+Sim 15  [band 13.0-14.0]
+  No valid patches found → skip
+Sim 16  [band 13.0-14.0]
+  No valid patches found → skip
+Sim 17  [band 13.0-14.0]
+  No valid patches found → skip
+Sim 18  [band 13.0-14.0]
+  No valid patches found → skip
+Sim 20  [band 13.0-14.0]
+  No valid patches found → skip
+Sim 21  [band 13.0-14.0]
+  No valid patches found → skip
+Sim 22  [band 13.0-14.0]
+  No valid patches found → skip
+Sim 23  [band 13.0-14.0]
+  No valid patches found → skip
+Sim 24  [band 13.0-14.0]
+  No valid patches found → skip
+Sim 25  [band 13.0-14.0]
+  No valid patches found → skip
+Sim 26  [band 13.0-14.0]
+  No valid patches found → skip
+Sim 27  [band 13.0-14.0]
+  No valid patches found → skip
+Sim 28  [band 13.0-14.0]
+  No valid patches found → skip
+Sim 29  [band 13.0-14.0]
+  No valid patches found → skip
+Sim 30  [band 13.0-14.0]
+  No valid patches found → skip
+Sim 31  [band 13.0-14.0]
+  No valid patches found → skip
+Sim 32  [band 13.0-14.0]
+  No valid patches found → skip
+Sim 33  [band 13.0-14.0]
+  No valid patches found → skip
+Sim 34  [band 13.0-14.0]
+  No valid patches found → skip
+Sim 35  [band 13.0-14.0]
+  No valid patches found → skip
+Sim 36  [band 13.0-14.0]
+  No valid patches found → skip
+Sim 37  [band 13.0-14.0]
+  No valid patches found → skip
+Sim 38  [band 13.0-14.0]
+  No valid patches found → skip
+Sim 39  [band 13.0-14.0]
+  No valid patches found → skip
+Sim 40  [band 13.0-14.0]
+  No valid patches found → skip
+Sim 41  [band 13.0-14.0]
+  No valid patches found → skip
+Sim 42  [band 13.0-14.0]
+  No valid patches found → skip
+Sim 43  [band 13.0-14.0]
+  No valid patches found → skip
+Sim 44  [band 13.0-14.0]
+  No valid patches found → skip
+Sim 45  [band 13.0-14.0]
+  No valid patches found → skip
+Sim 46  [band 13.0-14.0]
+  No valid patches found → skip
+Sim 47  [band 13.0-14.0]
+  No valid patches found → skip
+Sim 48  [band 13.0-14.0]
+  No valid patches found → skip
+Sim 49  [band 13.0-14.0]
+  No valid patches found → skip
+Sim 50  [band 13.0-14.0]
+  No valid patches found → skip
+Sim 51  [band 13.0-14.0]
+  No valid patches found → skip
+Sim 52  [band 13.0-14.0]
+  No valid patches found → skip
+Sim 53  [band 13.0-14.0]
+  No valid patches found → skip
+Sim 54  [band 13.0-14.0]
+  No valid patches found → skip
+Sim 55  [band 13.0-14.0]
+  No valid patches found → skip
+Sim 56  [band 13.0-14.0]
+  No valid patches found → skip
+Sim 57  [band 13.0-14.0]
+  No valid patches found → skip
+Sim 58  [band 13.0-14.0]
+  No valid patches found → skip
+Sim 60  [band 13.0-14.0]
+  No valid patches found → skip
+Sim 61  [band 13.0-14.0]
+  No valid patches found → skip
+Sim 62  [band 13.0-14.0]
+  No valid patches found → skip
+Sim 63  [band 13.0-14.0]
+  No valid patches found → skip
+Sim 64  [band 13.0-14.0]
+  No valid patches found → skip
+Sim 65  [band 13.0-14.0]
+  No valid patches found → skip
+Sim 66  [band 13.0-14.0]
+  No valid patches found → skip
+Sim 67  [band 13.0-14.0]
+  No valid patches found → skip
+Sim 68  [band 13.0-14.0]
+  No valid patches found → skip
+Sim 69  [band 13.0-14.0]
+  No valid patches found → skip
+Sim 70  [band 13.0-14.0]
+  No valid patches found → skip
+Sim 71  [band 13.0-14.0]
+  No valid patches found → skip
+Sim 72  [band 13.0-14.0]
+  No valid patches found → skip
+Sim 73  [band 13.0-14.0]
+  No valid patches found → skip
+Sim 74  [band 13.0-14.0]
+  No valid patches found → skip
+Sim 75  [band 13.0-14.0]
+  No valid patches found → skip
+Sim 76  [band 13.0-14.0]
+  No valid patches found → skip
+Sim 77  [band 13.0-14.0]
+  No valid patches found → skip
+Sim 78  [band 13.0-14.0]
+  No valid patches found → skip
+Sim 79  [band 13.0-14.0]
+  No valid patches found → skip
+Sim 80  [band 13.0-14.0]
+  No valid patches found → skip
+Sim 81  [band 13.0-14.0]
+  No valid patches found → skip
+Sim 82  [band 13.0-14.0]
+  No valid patches found → skip
+Sim 83  [band 13.0-14.0]
+  No valid patches found → skip
+Sim 84  [band 13.0-14.0]
+  No valid patches found → skip
+Sim 85  [band 13.0-14.0]
+  No valid patches found → skip
+Sim 86  [band 13.0-14.0]
+  No valid patches found → skip
+Sim 87  [band 13.0-14.0]
+  No valid patches found → skip
+Sim 88  [band 13.0-14.0]
+  No valid patches found → skip
+Sim 89  [band 13.0-14.0]
+  No valid patches found → skip
+Sim 90  [band 13.0-14.0]
+  No valid patches found → skip
+Sim 91  [band 13.0-14.0]
+  No valid patches found → skip
+Sim 92  [band 13.0-14.0]
+  No valid patches found → skip
+Sim 93  [band 13.0-14.0]
+  No valid patches found → skip
+Sim 94  [band 13.0-14.0]
+  No valid patches found → skip
+Sim 95  [band 13.0-14.0]
+  No valid patches found → skip
+Sim 96  [band 13.0-14.0]
+  No valid patches found → skip
+Sim 97  [band 13.0-14.0]
+  No valid patches found → skip
+Sim 98  [band 13.0-14.0]
+  No valid patches found → skip
+Sim 99  [band 13.0-14.0]
+  No valid patches found → skip
+Sim 100  [band 13.0-14.0]
+  No valid patches found → skip
+
+Band [13.0, 14.0): processed 97 sims | valid: 0 | patches: 0
