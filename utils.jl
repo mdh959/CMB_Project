@@ -9,7 +9,7 @@ export get_Cℓ_fft, bin_spectrum, bin_stat, bin_stat_err
 export grad_fft
 
 # ── Gradient Inversion estimator ──
-export gi_estimate
+export gi_estimate, gi_estimate_boryana, gi_estimate_corrected
 
 # ── Normalization (analytical + empirical W_L) ──
 export compute_RL_iterative, compute_WL, compute_WL_analytical

@@ -38,11 +38,13 @@ const Δℓ     = 2000
 
 # Gradient selection (units must match error_mean.jl / Utils.grad_fft)
 # Two bands are compared side by side:
-#   Band A (high gradient):  [13, 14) — top ~15% of field by gradient strength
-#   Band B (medium gradient): [5,  6) — typical/moderate gradient regions
-# From diagnostic stats: p50≈8, p90≈15, p99≈21, max≈35
-
-const BANDS = [(13.0, 14.0), (5.0, 6.0)]
+#   Band A (high gradient):  old [12.8, 13.8) → top ~10–15% of field by gradient strength
+#   Band B (moderate gradient): old [9, 10)   → just above median, uniform-slope regions
+# From diagnostic stats (new units): p50≈37600, p90≈68800 µK/rad
+const BANDS = [(60000.0, 65000.0), (42000.0, 47000.0)]
+# Bands in µK/rad (current grad_fft output units). Scale factor vs old µK/arcmin ≈ 4700.
+# Band A: old [12.8, 13.8) → high gradient (~p85–p90)
+# Band B: old [8.9, 10.0) → moderate gradient, just above median (~p52–p60)
 
 # Within-patch uniformity: std(|gradT|) / mean(|gradT|) must be below this.
 const GRAD_RMS_FRAC_MAX = 0.25
