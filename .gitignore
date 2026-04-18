@@ -7,6 +7,8 @@ venv/
 *.fits
 *.tar
 *.npy
-data/
-*_phis.jld2
+*.jld2
+*.npz
+data/*
+!data/ul_comparison_sims_*.npz
 
