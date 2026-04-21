@@ -179,9 +179,8 @@ uuid = "b3e40c51-02ae-5482-8a39-3ace5868dcf4"
 version = "4.6.2+0"
 
 [[deps.CMBLensing]]
-deps = ["AbstractFFTs", "Adapt", "Bijections", "ChainRules", "CodecZlib", "Combinatorics", "ComponentArrays", "CompositeStructs", "CoordinateTransformations", "DataStructures", "DelimitedFiles", "Distributed", "Distributions", "EllipsisNotation", "FFTW", "FileIO", "Formatting", "ForwardDiff", "Healpix", "ImageFiltering", "ImageMorphology", "Images", "InteractiveUtils", "Interpolations", "IterTools", "JLD2", "KahanSummation", "Lazy", "Libdl", "LinearAlgebra", "Loess", "MCMCDiagnosticTools", "MacroTools", "Markdown", "Match", "Measurements", "Memoization", "NFFT", "NamedTupleTools", "Optim", "PDMats", "Pkg", "PlotUtils", "PrecompileTools", "Preferences", "Printf", "ProgressMeter", "QuadGK", "Random", "RecipesBase", "Requires", "Roots", "Rotations", "Serialization", "Setfield", "SparseArrays", "StaticArrays", "Statistics", "StatsBase", "TimerOutputs", "Tullio", "UnPack", "Zygote"]
-git-tree-sha1 = "7a2b4c8ef70904920542b65927759e81338036c5"
-pinned = true
+deps = ["AbstractFFTs", "Adapt", "Bijections", "ChainRules", "ChainRulesCore", "CodecZlib", "Combinatorics", "ComponentArrays", "CompositeStructs", "CoordinateTransformations", "DataStructures", "DelimitedFiles", "Distributed", "Distributions", "EllipsisNotation", "FFTW", "FileIO", "Formatting", "ForwardDiff", "GPUArrays", "Healpix", "ImageFiltering", "ImageMorphology", "Images", "InteractiveUtils", "Interpolations", "IterTools", "JLD2", "KahanSummation", "Lazy", "Libdl", "LinearAlgebra", "Loess", "MCMCDiagnosticTools", "MacroTools", "Markdown", "Match", "Measurements", "Memoization", "NFFT", "NamedTupleTools", "Optim", "PDMats", "Pkg", "PlotUtils", "PrecompileTools", "Preferences", "Printf", "ProgressMeter", "QuadGK", "Random", "RecipesBase", "Requires", "Roots", "Rotations", "Serialization", "Setfield", "SparseArrays", "StaticArrays", "Statistics", "StatsBase", "TimerOutputs", "Tullio", "UnPack", "Zygote"]
+path = "CMBLensing.jl"
 uuid = "b60c06c0-7e54-11e8-3788-4bd722d65317"
 version = "0.10.1"
 
