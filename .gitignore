@@ -11,4 +11,7 @@ venv/
 *.npz
 data/*
 !data/ul_comparison_sims_*.npz
+.CondaPkg/
+.vscode/
+Manifest.toml
 
