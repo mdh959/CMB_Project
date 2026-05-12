@@ -37,7 +37,7 @@ using .Utils
 
 const μKarcminT = 0.1
 const beamFWHM  = 0.3
-const Lmax      = 20000
+const Lmax      = 12000
 const θpix      = 0.7438046267475303
 const Nside     = 512
 const pol       = :I
@@ -45,13 +45,20 @@ const Δℓ_wl     = 150
 const seed0     = 1000
 const n_sims    = 100
 
-const Cℓ       = camb(r=0.05, ℓmax=35000)
-const Cℓn      = noiseCℓs(μKarcminT=μKarcminT, ℓknee=0, ℓmax=Lmax)
-const bandpass  = LowPass(Lmax)
+const Cℓ          = camb(r=0.05, ℓmax=35000)
+const Cℓn         = noiseCℓs(μKarcminT=μKarcminT, ℓknee=0, ℓmax=Lmax)
+const bandpass     = LowPass(Lmax)
+const qe_bandpass  = LowPass(Lmax; Δℓ=2000)   # wide taper avoids 1/C^TT blow-up at bandpass edge
+const qe_Cℓn      = noiseCℓs(μKarcminT=μKarcminT, ℓknee=0, ℓmax=Lmax)
 
 const load_kwargs = (
     Cℓ=Cℓ, Cℓn=Cℓn, θpix=θpix, T=Float64, Nside=Nside,
     beamFWHM=beamFWHM, pol=pol, bandpass_mask=bandpass,
+    pixel_mask_kwargs=(edge_padding_deg=0, apodization_deg=0, num_ptsrcs=0),
+)
+const qe_load_kwargs = (
+    Cℓ=Cℓ, Cℓn=qe_Cℓn, θpix=θpix, T=Float64, Nside=Nside,
+    beamFWHM=beamFWHM, pol=pol, bandpass_mask=qe_bandpass,
     pixel_mask_kwargs=(edge_padding_deg=0, apodization_deg=0, num_ptsrcs=0),
 )
 
@@ -88,10 +95,11 @@ for file_idx in 1:(n_sims ÷ sims_per_file)
         flush(stdout)
 
         (; ϕ, ds) = load_sim(; seed=seed, load_kwargs...)
+        ds_qe     = load_sim(; seed=seed, qe_load_kwargs...).ds
 
-        ϕqe = quadratic_estimate(ds; weights=:unlensed, wiener_filtered=false).ϕqe
+        ϕqe = quadratic_estimate(ds_qe; weights=:unlensed, wiener_filtered=false).ϕqe
 
-        res_RD = N0_bias(ds; realization_spec=:data, weights=:unlensed)
+        res_RD = N0_bias(ds_qe; realization_spec=:data, weights=:unlensed)
         N0_cl  = cov_to_Cℓ(res_RD.N0; Δℓ=Δℓ_wl)
         N0_arr = Float64.(N0_cl.Cℓ)
 
