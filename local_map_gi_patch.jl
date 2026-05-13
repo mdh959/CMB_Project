@@ -35,6 +35,7 @@ const DO_GRADIENT_PATCHES = true
 const DO_ORACLE_LOCAL_AMP = true
 
 const Np       = 256
+const Np_vis   = 64     # patch size for image panels (~0.8°, small enough gradient is ~constant)
 const ALPHA    = 0.2
 const ℓ_edges  = collect(3000.0:500.0:12500.0)
 const nb       = length(ℓ_edges) - 1
@@ -382,6 +383,7 @@ println("Loading W_L files...")
 d_qegi = JLD2.load(WL_QEGI)
 d_map  = JLD2.load(WL_MAP)
 
+WL_qe = Cℓs(Float64.(d_qegi["ℓ_template"]), smooth_wl(Float64.(d_qegi["W_qe_raw"])))
 WL_gi = Cℓs(Float64.(d_qegi["ℓ_template"]), smooth_wl(Float64.(d_qegi["W_gi_b"])))
 WL_mj = Cℓs(Float64.(d_map["ℓ_template"]),  smooth_wl(Float64.(d_map["W_mj"])))
 
@@ -758,70 +760,80 @@ if amp_stats !== nothing
 end
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Example high-L κ maps
+# Supervisor figure: zoomed κ patches (high/low |∇T_LP|), 2 rows × 4 columns
+#   Row 1: high |∇T_LP| region   Row 2: ~zero |∇T_LP| region
+#   Cols: κ_true | κ_GI | κ_QE | κ_MAP
 # ─────────────────────────────────────────────────────────────────────────────
 
 let
-    s0 = first(shared)
-
-    t0 = jldopen(QEGI_FILE, "r") do f
-        Float64.(read(f, "sim_$s0/ϕ_true"))
+    s0        = first(shared)
+    seed0_val = jldopen(QEGI_FILE, "r") do f
+        haskey(f, "sim_$s0/seed") ? read(f, "sim_$s0/seed") : 1000 + s0
     end
-    g0 = jldopen(QEGI_FILE, "r") do f
-        Float64.(read(f, "sim_$s0/ϕ_gi_b"))
+
+    # Load phi fields (true, GI, QE-raw, MAP)
+    t0, g0, q0 = jldopen(QEGI_FILE, "r") do f
+        (Float64.(read(f, "sim_$s0/ϕ_true")),
+         Float64.(read(f, "sim_$s0/ϕ_gi_b")),
+         Float64.(read(f, "sim_$s0/ϕ_qe_raw")))
     end
     m0 = jldopen(MAP_FILE, "r") do f
         Float64.(read(f, "sim_$s0/ϕ_mj"))
     end
 
+    # Debias and bandpass → κ (4000 < L < 12000)
     g0_deb = debias_arr(g0, WL_gi, ℓ2d_full; minW_local=minW)
+    q0_deb = debias_arr(q0, WL_qe, ℓ2d_full; minW_local=minW)
     m0_deb = debias_arr(m0, WL_mj, ℓ2d_full; minW_local=minW)
 
     kt = bandpass_kappa_arr(t0,     ℓ2d_full; Llo=4000.0, Lhi=12000.0)
     kg = bandpass_kappa_arr(g0_deb, ℓ2d_full; Llo=4000.0, Lhi=12000.0)
+    kq = bandpass_kappa_arr(q0_deb, ℓ2d_full; Llo=4000.0, Lhi=12000.0)
     km = bandpass_kappa_arr(m0_deb, ℓ2d_full; Llo=4000.0, Lhi=12000.0)
 
-    maps = [kt, kg, km, km .- kg]
-    lbls = [
-        L"\kappa_{\rm true}\;(4000<L<12000)",
-        L"\hat\kappa_{\rm GI}\;(4000<L<12000)",
-        L"\hat\kappa_{\rm MAP}\;(4000<L<12000)",
-        L"\hat\kappa_{\rm MAP}-\hat\kappa_{\rm GI}",
-    ]
-    cmaps = ["RdBu_r", "RdBu_r", "RdBu_r", "PiYG"]
+    # Find high/low gradient patches at the smaller visualization scale
+    ds0                               = try_load_ds_for_gradient(seed0_val)
+    g2                                = grad_strength_from_data(ds0.d)
+    high_patch, low_patch, _, _       = choose_gradient_patches(g2, Np_vis; stride=32)
 
-    fig, axs = PythonPlot.subplots(1, 4; figsize=(16, 4.5), constrained_layout=true)
+    patches    = [high_patch, low_patch]
+    row_titles = ["High |∇T_LP|", "~Zero |∇T_LP|"]
+    col_titles = [L"\kappa_{\rm true}", L"\hat\kappa_{\rm GI}",
+                  L"\hat\kappa_{\rm QE}", L"\hat\kappa_{\rm MAP}"]
+    kfields    = [kt, kg, kq, km]
 
-    for (ax, mp, lbl, cm) in [
-        (axs[0], maps[1], lbls[1], cmaps[1]),
-        (axs[1], maps[2], lbls[2], cmaps[2]),
-        (axs[2], maps[3], lbls[3], cmaps[3]),
-        (axs[3], maps[4], lbls[4], cmaps[4]),
-    ]
-        vm = max(quantile(abs.(vec(mp)), 0.995), 1e-30)
-        im = ax.imshow(mp; cmap=cm, vmin=-vm, vmax=vm, origin="lower",
-                       extent=[0, Nside * θpix / 60, 0, Nside * θpix / 60])
+    patch_deg = Np_vis * θpix / 60
+    fig, axs  = PythonPlot.subplots(2, 4; figsize=(14, 7), constrained_layout=true)
 
-        fig.colorbar(im; ax=ax, fraction=0.046, pad=0.04)
-        ax.set_title(lbl; fontsize=10)
-        ax.set_xlabel("deg"; fontsize=9)
-        ax.set_ylabel("deg"; fontsize=9)
+    for (ri, (_, rows, cols)) in enumerate(patches)
+        # colour scale: symmetric at 99.5th percentile of κ_true in this patch
+        vm = max(quantile(abs.(vec(kt[rows, cols])), 0.995), 1e-30)
 
-        for (_, rows, cols) in quadrant_patches
-            r0 = (first(rows) - 1) * θpix / 60
-            r1 = last(rows) * θpix / 60
-            c0 = (first(cols) - 1) * θpix / 60
-            c1 = last(cols) * θpix / 60
-            ax.plot([c0, c1, c1, c0, c0], [r0, r0, r1, r1, r0];
-                    color="k", lw=0.7, ls="--", alpha=0.5)
+        r0_deg = (first(rows) - 1) * θpix / 60
+        r1_deg = last(rows)        * θpix / 60
+        c0_deg = (first(cols) - 1) * θpix / 60
+        c1_deg = last(cols)        * θpix / 60
+
+        for (ci, kmap) in enumerate(kfields)
+            ax = axs[ri - 1, ci - 1]
+            im = ax.imshow(kmap[rows, cols]; cmap="RdBu_r", vmin=-vm, vmax=vm,
+                           origin="lower", extent=[c0_deg, c1_deg, r0_deg, r1_deg],
+                           aspect="equal")
+            fig.colorbar(im; ax=ax, fraction=0.046, pad=0.04)
+            ri == 1 && ax.set_title(col_titles[ci]; fontsize=11)
+            ci == 1 && ax.set_ylabel("$(row_titles[ri])\ndec (deg)"; fontsize=9)
+            ri == 2 && ax.set_xlabel("ra (deg)"; fontsize=9)
         end
     end
 
-    fig.suptitle("Example sim $s0 — high-L κ fields, W-debiased GI/MAP", fontsize=10)
-    fig.savefig(joinpath(OUT_DIR, "example_maps_true_gi_map_residual.png");
-                dpi=200, bbox_inches="tight")
+    fig.suptitle(
+        "Sim $s0 — κ (4000<L<12000) in zoomed $(Np_vis)×$(Np_vis) px patches " *
+        "($(round(patch_deg; sigdigits=2))°): high/low |∇T_LP| regions",
+        fontsize=10)
+    fname = joinpath(OUT_DIR, "supervisor_kappa_patches.png")
+    fig.savefig(fname; dpi=200, bbox_inches="tight")
     PythonPlot.plotclose("all")
-    println("Saved example_maps_true_gi_map_residual.png")
+    println("Saved supervisor_kappa_patches.png")
 end
 
 # ─────────────────────────────────────────────────────────────────────────────

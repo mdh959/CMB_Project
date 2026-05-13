@@ -45,6 +45,7 @@ println("f_sky_patch = $(round((Nside*θpix*π/(180*60))^2/(4π); sigdigits=4))"
 
 function run_noise_level(μKarcminT::Float64, suffix::String, Lmax::Int, beamFWHM::Float64;
                          Δℓ_wl::Int=Δℓ, run_map::Bool=true, run_rdn0::Bool=false,
+                         run_convergence_diag::Bool=false,
                          θpix_sim::Float64=θpix, Nside_sim::Int=Nside,
                          map_Lmax::Int=Lmax, map_αmax::Float64=0.05,
                          map_zero_start::Bool=false, map_warmstart_Lmax::Int=0,
@@ -536,6 +537,13 @@ function run_noise_level(μKarcminT::Float64, suffix::String, Lmax::Int, beamFWH
                 "    ⚠ STILL CONVERGING (last-step rate=$(round(100*frac;digits=1))% of mean)" :
                 "    ✓ CONVERGED (last-step rate < 5% of mean)")
         end
+
+        if run_convergence_diag
+            diag_file = "results/diag_map_convergence$(map_file_suffix).jld2"
+            jldsave(diag_file; mean_logpdf=mean_lp, all_logpdf_histories=logpdf_histories,
+                    good_logpdf_histories=good_hists, map_file_suffix, μKarcminT, map_nsteps)
+            println("  Saved convergence diag → $diag_file")
+        end
     end
 
 end
@@ -555,15 +563,12 @@ run_noise_level(0.1, "_ul", 12000, 0.3;
                 Δℓ_wl=150,
                 run_rdn0=false,
                 run_map=true,
-                map_file_suffix="_ul_hess2",
-                map_zero_start=false,
-                map_warmstart_weights=:lensed,
-                map_warmstart_Lmax=6000,
-                map_warmstart_scale=0.5,
+                map_file_suffix="_ul_hess3",
+                map_zero_start=true,
                 map_αmax=0.05,
                 map_nburnin_hessian=2,
-                map_nsteps=70,
-                map_nsims=150, map_extra_exclude=Set([10]))
+                map_nsteps=60,
+                map_nsims=150)
 
 
 println("\nAll done.")

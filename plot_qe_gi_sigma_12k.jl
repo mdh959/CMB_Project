@@ -401,6 +401,38 @@ function process_noise_level(WL_file, phi_maps_file, label;
         println(); println("  $(length(Cl_auto_mj_sims)) MAP sims")
     end
 
+    # ── Near-zero outlier diagnostic ──────────────────────────────────────────
+    # The 15×median RMS filter catches high-RMS runaways but not near-zero sims
+    # (collapsed/non-converged solutions). Check coarse bandpowers for anomalies.
+    function _check_auto_outliers(sims, name, edges, ℓv)
+        isempty(sims) && return
+        M = bands_per_sim(ℓv, sims, edges)  # (nbands × nsims)
+        ns = size(M, 2); nb = size(M, 1)
+        all_vals = filter(isfinite, vec(M))
+        isempty(all_vals) && return
+        med_bp = median(all_vals)
+        thresh_lo = 0.05 * med_bp   # flag if < 5% of median (catches near-zero)
+        bad = [j for j in 1:ns if any(isfinite(M[b,j]) && M[b,j] < thresh_lo for b in 1:nb)]
+        println("  [$name] per-sim auto bandpower check: median=$(round(med_bp,sigdigits=3)), " *
+                "5%-of-median threshold=$(round(thresh_lo,sigdigits=3))")
+        if isempty(bad)
+            println("    No near-zero outlier sims detected.")
+        else
+            println("    Near-zero outlier sim indices: $bad")
+            for j in bad
+                bp_str = join([@sprintf("%.2e", isfinite(M[b,j]) ? M[b,j] : NaN) for b in 1:nb], ", ")
+                println("      sim[$j] bandpowers: [$bp_str]")
+            end
+        end
+        # Also print full per-sim bandpower table for inspection
+        println("  [$name] per-sim bandpowers (rows=band, cols=sim):")
+        Lc_diag = [0.5*(edges[b]+edges[b+1]) for b in 1:(length(edges)-1)]
+        for b in 1:nb
+            isnan(Lc_diag[b]) && continue
+            row = [@sprintf("%8.2e", isfinite(M[b,j]) ? M[b,j] : NaN) for j in 1:ns]
+            println("    L≈$(round(Int,Lc_diag[b])): $(join(row, " "))")
+        end
+    end
     # σ rescaling: sample variance ∝ 1/N_modes ∝ 1/(f_sky ΔL (2L+1)), so σ ∝ 1/√f_sky.
     # Multiplying by √(f_sky_sim/f_sky_paper) converts simulation σ to the survey area
     # of Hadzhiyska+2019 (f_sky=0.4) for a direct comparison with their figures.
@@ -409,6 +441,10 @@ function process_noise_level(WL_file, phi_maps_file, label;
     σ_sc       = sqrt(f_sky_sim / f_sky_paper)
 
     ℓv = ℓ_kk !== nothing ? ℓ_kk : Float64[]
+
+    println("\n── Auto bandpower outlier diagnostics for: $label ──")
+    _check_auto_outliers(Cl_auto_qe_rdn0_sims, "QE RDN0", proc_edges, ℓv)
+    _check_auto_outliers(Cl_auto_mj_sims,      "MAP",     proc_edges, ℓv)
     Tmat = reduce(hcat, Cl_true_sims)
     Lc, C̄_true, _ = coarsen(ℓv, Tmat; edges=proc_edges)
     Neff_v = @. (2*Lc + 1) * ΔL * f_sky_paper
@@ -682,13 +718,19 @@ let
         da !== nothing && da.has_map &&
             push!(auto_pairs, ("mj_hess2", da.σ_a_mj, da.σ_th_a_mj))
 
-        for (row, pairs) in [(1, auto_pairs),
-                              (2, [("qe",  d.σ_x_qe,  d.σ_th_x_qe),
-                                   ("gi",  d.σ_x_gi,   d.σ_th_x_gi),
-                                   ("mj",  d.σ_x_mj,   d.σ_th_x_mj)])]
+        cross_pairs = Tuple{String,Vector{Float64},Vector{Float64}}[
+            ("qe",  d.σ_x_qe,  d.σ_th_x_qe),
+            ("gi",  d.σ_x_gi,   d.σ_th_x_gi),
+            ("mj",  d.σ_x_mj,   d.σ_th_x_mj),
+        ]
+        da !== nothing && da.has_map &&
+            push!(cross_pairs, ("mj_hess2", da.σ_x_mj, da.σ_th_x_mj))
+
+        for (row, pairs) in [(1, auto_pairs), (2, cross_pairs)]
             ax = getax(row, c)
             for (key, σ, σ_th) in pairs
                 key == "mj"       && !d.has_map      && continue
+                key == "mj_hess2" && (da === nothing || !da.has_map) && continue
                 key == "gi_rdn0"  && !d.has_gi_rdn0  && continue
                 key == "gi_linrd" && !d.has_gi_linrd && continue
                 msk = @. !isnan(Lc) & isfinite(σ) & (σ > 0)
@@ -1121,9 +1163,10 @@ let
             (bands_per_sim(d.ℓ_kk, d.Cl_auto_qe_full_sims, corr_edges),
              bands_per_sim(d.ℓ_kk, d.Cl_auto_gi_full_sims, corr_edges),
              bands_per_sim(d.ℓ_kk, d.Cl_auto_mj_sims,      corr_edges)),
-            # Row 1: N0 subtraction — QE RDN0 (per-sim); GI fg-MC N0 (per-sim); MAP not shown (no N0 estimate)
-            (bands_per_sim(d.ℓ_kk, d.Cl_auto_qe_rdn0_sims,  corr_edges),
-             bands_per_sim(d.ℓ_kk, d.Cl_auto_gi_fgmc_sims,  corr_edges),
+            # Row 1: N0 subtraction — QE RDN0 (per-sim); GI: fgmc (S4) or linrd (UL); MAP not shown
+            (bands_per_sim(d.ℓ_kk, d.Cl_auto_qe_rdn0_sims, corr_edges),
+             bands_per_sim(d.ℓ_kk, (occursin("UL", d.label) && d.has_gi_linrd ?
+                                     d.Cl_auto_gi_linrd_sims : d.Cl_auto_gi_fgmc_sims), corr_edges),
              fill(NaN, length(corr_edges)-1, 0)),
             # Row 2: cross (N0-free by construction)
             (bands_per_sim(d.ℓ_kk, d.Cl_cross_qe_sims, corr_edges),
@@ -1146,7 +1189,7 @@ let
             end
         end
     end
-    fig.suptitle(L"Bandpower correlation $\rho_{LL'}$ ($\Delta L=500$)  —  row 1: no N0 sub, row 2: N0 sub (QE: RDN0, GI: fg-MC N0, MAP: none), row 3: cross", fontsize=10)
+    fig.suptitle(L"Bandpower correlation $\rho_{LL'}$ ($\Delta L=500$)  —  row 1: no N0 sub, row 2: N0 sub (QE: RDN0, GI: fg-MC N0 [S4] / LinRD [UL], MAP: none), row 3: cross", fontsize=10)
     fig.savefig("$OUT_DIR/fig_covariance_correlation.png"; dpi=200)
     PythonPlot.plotclose("all")
     println("Saved fig_covariance_correlation.png")
@@ -1160,9 +1203,10 @@ let
 
         n0_fgmc_acc = nothing; ell_fgmc = nothing
         n0_linrd_acc = nothing; ell_linrd = nothing
+        n0_linrd_ab_acc = nothing; ell_linrd_ab = nothing
         n0_rdn0_acc = nothing; n0_rdn0v2_acc = nothing
         n0_qe_acc   = nothing
-        n_fgmc = 0; n_linrd = 0; n_rdn0 = 0; n_rdn0v2 = 0; n_qe = 0
+        n_fgmc = 0; n_linrd = 0; n_linrd_ab = 0; n_rdn0 = 0; n_rdn0v2 = 0; n_qe = 0
 
         jldopen(d.phi_maps_file, "r") do f
             for s in sort([parse(Int, m.captures[1])
@@ -1184,6 +1228,14 @@ let
                     end
                     n0_linrd_acc = n0_linrd_acc === nothing ? copy(v) : n0_linrd_acc .+ v
                     n_linrd += 1
+                end
+                if haskey(f, "sim_$s/N0_gi_linrd_ab")
+                    v = Float64.(read(f, "sim_$s/N0_gi_linrd_ab"))
+                    if ell_linrd_ab === nothing && haskey(f, "sim_$s/N0_gi_linrd_ab_ell")
+                        ell_linrd_ab = Float64.(read(f, "sim_$s/N0_gi_linrd_ab_ell"))
+                    end
+                    n0_linrd_ab_acc = n0_linrd_ab_acc === nothing ? copy(v) : n0_linrd_ab_acc .+ v
+                    n_linrd_ab += 1
                 end
                 if haskey(f, "sim_$s/N0_gi_rdn0")
                     v = Float64.(read(f, "sim_$s/N0_gi_rdn0"))
@@ -1212,10 +1264,11 @@ let
             ax.semilogy(ell, kf .* acc ./ n; label=label, color=color, lw=2, ls=ls)
         end
 
-        plot_n0!(ell_fgmc,  n0_fgmc_acc,  n_fgmc,  "GI fg-MC N0 ($(n_fgmc) sims)",          CLR["gi_fgmc"])
-        plot_n0!(ell_linrd, n0_linrd_acc, n_linrd, "GI lin-RD N0 ($(n_linrd) sims)",         CLR["gi_linrd"]; ls="-.")
-        plot_n0!(ell_fgmc,  n0_rdn0_acc,  n_rdn0,  "GI RDN0 ($(n_rdn0) sims)",               CLR["gi_rdn0"]; ls="--")
-        plot_n0!(ell_fgmc,  n0_rdn0v2_acc,n_rdn0v2,"GI RDN0-v2/σ_fid ($(n_rdn0v2) sims)",   CLR["gi_rdn0"]; ls=":")
+        plot_n0!(ell_fgmc,     n0_fgmc_acc,     n_fgmc,     "GI fg-MC N0 ($(n_fgmc) sims)",              CLR["gi_fgmc"])
+        plot_n0!(ell_linrd,    n0_linrd_acc,    n_linrd,    "GI lin-RD N0 ($(n_linrd) sims)",             CLR["gi_linrd"]; ls="-.")
+        plot_n0!(ell_linrd_ab, n0_linrd_ab_acc, n_linrd_ab, "GI lin-RD analytic baseline ($(n_linrd_ab) sims)", CLR["gi_linrd"]; ls="--")
+        plot_n0!(ell_fgmc,     n0_rdn0_acc,     n_rdn0,     "GI RDN0 ($(n_rdn0) sims)",                  CLR["gi_rdn0"]; ls="--")
+        plot_n0!(ell_fgmc,     n0_rdn0v2_acc,   n_rdn0v2,   "GI RDN0-v2/σ_fid ($(n_rdn0v2) sims)",      CLR["gi_rdn0"]; ls=":")
         if n_qe > 0 && length(d.ℓ_kk) == length(n0_qe_acc)
             kfac_qe = @. (d.ℓ_kk^2 / 2)^2
             ax.semilogy(d.ℓ_kk,

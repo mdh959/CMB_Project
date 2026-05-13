@@ -3,26 +3,25 @@
 # make_ul_comparison_sims.jl
 #
 # Generates 100 sims with the UL parameters from run_qe_gi_wl12k.jl,
-# split into 10 files of 10 sims each (ul_comparison_sims_001_010.npz, etc.).
+# split into 20 files of 5 sims each (ul_comparison_sims_001_005.npz, etc.).
+# 5 sims × 3 maps × 512² × 8 bytes ≈ 30 MB per file (under GitHub's 50 MB limit).
 # Each file has flat keys readable in Python via np.load:
-#   sim_N_T_obs      — observed T map (512x512), beam-convolved + noise
-#   sim_N_phi_true   — true lensing potential
-#   sim_N_phi_qe     — QE estimate (raw, not Wiener-filtered)
-#   sim_N_N0_rdn0    — RD-N0 band powers (same ℓ bins as params_l_template)
+#   sim_N_T_obs      — observed T map (512x512, Float64), beam-convolved + noise
+#   sim_N_phi_true   — true lensing potential (512x512, Float64)
+#   sim_N_phi_qe     — QE estimate (raw, not Wiener-filtered, 512x512, Float64)
 #   sim_N_seed       — seed (1-element array)
 #
 # Metadata (1-element arrays, same in every file):
 #   params_theta_pix, params_Nside, params_muKarcminT, params_beamFWHM,
 #   params_Lmax, params_lknee, params_seed0, params_n_sims,
-#   params_r_tensor, params_Cl_lmax, params_l_template
+#   params_r_tensor, params_Cl_lmax
 #
 # Python usage:
 #   import numpy as np
 #   d = np.load("ul_comparison_sims_001_010.npz")
-#   T_obs = d["sim_1_T_obs"]        # shape (512, 512)
-#   ells  = d["params_l_template"]
+#   T_obs = d["sim_1_T_obs"]        # shape (512, 512), float64
 #
-# Output: data/ul_comparison_sims_NNN_MMM.npz (10 files)
+# Output: data/ul_comparison_sims_NNN_MMM.npz (20 files)
 
 import Pkg; Pkg.activate(@__DIR__); Pkg.instantiate()
 
@@ -41,7 +40,6 @@ const Lmax      = 12000
 const θpix      = 0.7438046267475303
 const Nside     = 512
 const pol       = :I
-const Δℓ_wl     = 150
 const seed0     = 1000
 const n_sims    = 100
 
@@ -68,12 +66,10 @@ const load_kwargs = (
     end
 end
 
-const sims_per_file = 10
+const sims_per_file = 5    # 5 sims × 3 maps × 512² × 8 bytes ≈ 30 MB per file
 
 println("UL params: μKarcmin=$μKarcminT, beamFWHM=$beamFWHM, Lmax=$Lmax, θpix=$θpix, Nside=$Nside")
-println("Seeds: $(seed0+1) – $(seed0+n_sims), split into $(n_sims÷sims_per_file) files of $sims_per_file sims")
-
-ℓ_template = nothing
+println("Seeds: $(seed0+1) – $(seed0+n_sims), split into $(cld(n_sims, sims_per_file)) files of $sims_per_file sims")
 
 for file_idx in 1:(n_sims ÷ sims_per_file)
     sim_start = (file_idx - 1) * sims_per_file + 1
@@ -92,17 +88,9 @@ for file_idx in 1:(n_sims ÷ sims_per_file)
 
         ϕqe = quadratic_estimate(ds; weights=:unlensed, wiener_filtered=false).ϕqe
 
-        res_RD = N0_bias(ds; realization_spec=:data, weights=:unlensed)
-        N0_cl  = cov_to_Cℓ(res_RD.N0; Δℓ=Δℓ_wl)
-        N0_arr = Float64.(N0_cl.Cℓ)
-
-        global ℓ_template
-        ℓ_template === nothing && (ℓ_template = Float64.(collect(N0_cl.ℓ)))
-
         out["sim_$(s)_T_obs"]    = Float64.(Map(ds.d).arr)
         out["sim_$(s)_phi_true"] = Float64.(Map(ϕ).arr)
         out["sim_$(s)_phi_qe"]   = Float64.(Map(ϕqe).arr)
-        out["sim_$(s)_N0_rdn0"]  = N0_arr
         out["sim_$(s)_seed"]     = [seed]
 
         println("done")
@@ -119,10 +107,9 @@ for file_idx in 1:(n_sims ÷ sims_per_file)
     out["params_n_sims"]      = [n_sims]
     out["params_r_tensor"]    = [0.05]
     out["params_Cl_lmax"]     = [35000]
-    out["params_l_template"]  = ℓ_template !== nothing ? ℓ_template : Float64[]
 
     npzwrite(outfile, out)
     println("  Saved $outfile")
 end
 
-println("\nDone. Saved $n_sims sims across $(n_sims÷sims_per_file) files in data/")
+println("\nDone. Saved $n_sims sims across $(cld(n_sims, sims_per_file)) files in data/")
