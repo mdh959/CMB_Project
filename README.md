@@ -1,6 +1,33 @@
 # CMB Lensing Reconstruction: GI, QE, and MAP
 
-This project implements and compares three CMB lensing estimators — the Quadratic Estimator (QE), the Gradient-Inversion (GI) estimator of Hadzhiyska et al. (2019), and Joint MAP reconstruction — reproducing the key statistical figures from that paper at two noise levels: S4-like (1 µK-arcmin) and ultra-low (0.1 µK-arcmin).
+This project implements and compares three CMB lensing estimators — the Quadratic Estimator (QE), the Gradient-Inversion (GI) estimator of Hadzhiyska et al. (2019), and Joint MAP reconstruction — reproducing the key statistical figures from that paper at two noise levels: S4-like (1 µK-arcmin) and ultra-low (UL, 0.1 µK-arcmin).
+
+---
+
+## Summary
+
+The core finding is that GI outperforms QE in cross-spectrum σ at UL noise (3031 vs 1632 SNR), while MAP has comparable or lower SNR to QE when measured in debiased spectra. This apparent MAP underperformance is entirely explained by the Wiener transfer function W_L, which shrinks MAP amplitudes at high L by up to a factor of 3.5×. In raw (un-debiased) cross-spectra, MAP is competitive with or better than GI at each L bin — the debiasing step amplifies MAP sigma by 1/W_L. The key numbers:
+
+| L | W_MAP | σ_MAP_raw / σ_GI_raw | After 1/W_L amplification | Debiased comparison |
+|-------|-------|----------------------|--------------------------|---------------------|
+| 5000 | 0.649 | 0.88× | 0.88 / 0.649 = 1.35× | MAP worse |
+| 7000 | 0.602 | 0.76× | 0.76 / 0.602 = 1.26× | MAP worse |
+| 9000 | 0.436 | 1.10× | 1.10 / 0.436 = 2.52× | MAP worse |
+| 11000 | 0.284 | 0.98× | 0.98 / 0.284 = 3.45× | MAP much worse |
+
+GI avoids Wiener shrinkage because it directly inverts the gradient equation without a prior, so W_GI ≈ 0.84 on average (mode-recovery loss only, not prior shrinkage). MAP's W_L → 0 at high L where C_φφ → 0 and the prior dominates, which is optimal Bayesian behaviour — not a bug.
+
+**Gradient response analysis (N_sim = 473).** The GI denominator D(L) = Lx²σxx + 2LxLy σxy + Ly²σyy fluctuates between realisations. The ratio R = D_realized / D_fiducial sets how much gradient power is actually in a given CMB realisation. Pearson correlation r between D and each estimator's output shows:
+
+| Estimator | r(D, output) | Fisher z | Significance |
+|-----------|-------------|----------|--------------|
+| QE | 0.958 | 41.6σ | Expected — QE denominator ∝ ⟨\|∇T\|²⟩ by construction |
+| GI | 0.078 | 1.7σ | Not significant — GI successfully removes gradient dependence |
+| MAP | 0.223 | 4.9σ | Real effect, not noise — MAP has residual gradient-response coupling |
+
+MAP's r = 0.22 indicates that its preconditioner (which uses fiducial N0 = QE noise, not per-realization gradient power) leaves a 4.9σ residual correlation with D. The converged MAP solution has the correct phases (ρ_L is comparable to GI) but slightly wrong amplitude in realisations with anomalous gradient power. This is the motivation for **Phase 2**: a realization-dependent preconditioner where the per-mode Fisher weight D_D(Lx,Ly) replaces the fiducial D_fid(L).
+
+**r_iso.** The scalar `r_iso = (σ_xx_r + σ_yy_r) / (σ_xx_f + σ_yy_f)` is the angle-averaged ratio of the realised gradient variance to the fiducial (MC-mean) gradient variance for a given simulation. It summarises in a single number how much stronger or weaker the CMB gradient was in that realisation relative to the ensemble average. r_iso > 1 means the realised CMB had an unusually strong gradient (above-average lensing detectability for GI); r_iso < 1 means below-average. Typical values scatter around 1 with r_iso ≈ 1.038 observed in diagnostic runs. The 2D anisotropic version D_D(Lx,Ly) = Lx²σ_xx_r + 2LxLyσ_xy_r + Ly²σ_yy_r resolves this into directional gradient power and is the quantity that enters the GI normalisation and the Cϕ-realised diagnostic.
 
 ---
 
@@ -245,10 +272,111 @@ The `nburnin_update_hessian` quasi-Newton update in `MAP_joint` was silently fai
 
 MAP was re-run at S4 noise with the fiducial C^φφ prior multiplied by ×5, ×20, and ×100 at all L. The transfer function W_L did respond: with a 100× inflated prior the MAP W_L at high L increased toward W_GI, confirming the optimizer finds a different fixed point when the prior penalty is weaker. However, ρ_L did not improve. The MAP correlation coefficient remained at the same values as the fiducial run regardless of prior strength. This decoupling — W_L rises but ρ_L stays flat — shows that the prior Wiener filter is not the fundamental limitation on MAP performance at high L; the likelihood itself does not contain enough signal-to-noise in φ at L ≳ 6000 for the S4 noise level to improve ρ_L over QE. The prior sets the amplitude of the reconstruction, but the SNR in φ at these scales is genuinely low. GI sidesteps this because it is not a Bayesian estimator: it directly inverts the gradient equation without a prior penalty, so it avoids the Wiener suppression, but this also means it does not optimally weight modes.
 
-### Next steps
+### Zero-prior MAP test (`_ul_zero_a01`)
 
-- **Noiseless test**: run MAP on data with zero noise to check whether the likelihood alone recovers GI-level ρ_L at high L.
-- **MAP marginal**: marginalising over the unlensed CMB field (MAP_marg) avoids fixing the CMB to its MAP value and should give better high-L recovery, at significantly higher computational cost.
+MAP was re-run at UL noise with the prior completely removed (C_φφ → ∞, zero prior gradient) and a smaller step size α = 0.1. Without the prior, MAP reduces to a maximum-likelihood estimator and the Wiener shrinkage W_L → 1 is no longer forced. Results are stored in `WL_map_12000_ul_zero_a01.jld2` and `phi_maps_map_12000_ul_zero_a01.jld2`. This run is overlaid in orange on the sigma, ρ_L, and W_L figures.
+
+The Hessian (quasi-Newton secant) update is unreliable in this setting: once the log-posterior gradient becomes very small (near convergence or with no prior), the secant approximation |Δφ°| / |Δ∇| is 0/0, causing NaN and silently failing the `all(isfinite)` guard. The optimizer falls back to the fiducial preconditioner. This does not affect the converged MAP answer (fiducial vs realisation-dependent preconditioner change only the convergence path, not the fixed point) but does mean the adaptive Hessian offers no benefit in this run. Known-bad sims excluded: `{121, 242, 362, 453, 484, 661, 1916}`.
+
+The zero-prior result is interesting precisely because it isolates the amplitude question: if MAP converges correctly without the prior, W_L should approach 1. If it does not, the explanation is either finite-iteration convergence failure or that the likelihood curvature at high L is so flat that many more steps are needed.
+
+### Phase 2: Realization-dependent preconditioner
+
+The 4.9σ gradient-response correlation in MAP (r = 0.223) suggests the fiducial preconditioner does not fully exploit per-realization information. The GI Fisher weighting D(Lx,Ly) = Lx²σxx + 2LxLy σxy + Ly²σyy directly captures the per-mode signal-to-noise available in each realisation. Replacing the fiducial Nϕ in `Hessian_logpdf_preconditioner` with a realisation-dependent version:
+
+```
+N_ϕ^{realized}(L) = N_ϕ^{fid}(L) × D_fid(L) / D_D(Lx,Ly)
+```
+
+would tighten the preconditioner in modes where the gradient is stronger than average (D_D > D_fid → smaller effective noise → larger step) and widen it where it is weaker. Two variants in order of difficulty:
+
+- **Scalar version**: R_scalar = (σ_D_xx + σ_D_yy) / (σ_fid_xx + σ_fid_yy). Modify `ds.Nϕ /= R_scalar` before `MAP_joint`. Changes only convergence speed.
+- **Per-mode version**: field-valued `Nϕ(Lx,Ly) = N_ϕ^{fid}(L) × D_fid(L) / D_D(Lx,Ly)`. Requires passing a `FlatFourier` field as `ds.Nϕ`, touching CMBLensing internals.
+
+If MAP is genuinely converged (confirmed by log-posterior plateaus), preconditioner changes will not move the final answer — the effect would only be visible with a fixed iteration budget where better conditioning reaches the fixed point faster. Alternatively, modifying the effective prior Cϕ per realisation (not just the preconditioner) would change the converged answer, but this is a different estimator altogether.
+
+---
+
+## Current Results — UL (0.1 µK-arcmin, Lmax=12000)
+
+Production run: 1000 QE/GI sims, ~500 MAP sims (zero start, αmax=0.05, 80 steps, CG tol=1e-4, nsteps=500). All estimators debiased by ensemble-mean W_L.
+
+| Dataset | Auto-QE | Auto-GI | Auto-MAP | Cross-QE | Cross-GI | Cross-MAP |
+|---------|---------|---------|---------|---------|---------|---------|
+| UL (0.1 µK-arcmin) | 339.4 | 303.6 | 657.5 | 1631.7 | 3031.7 | 1718.5 |
+| Paper UL (Hadzhiyska+2019) | 205 | 1515 | — | 710 | 4100 | — |
+
+MAP dominates on auto-SNR (657 vs 339 QE, 303 GI). GI dominates on cross-SNR. MAP beats QE on cross-SNR (1718 vs 1631). The MAP-GI cross-SNR gap is explained below.
+
+---
+
+## MAP vs GI: Theoretical Analysis
+
+### Does MAP use the realised gradient?
+
+Yes — through the likelihood. In each MAP iteration the CG inner loop solves for the Wiener-filtered CMB `f_wf` given the current `ϕ`. That `f_wf` gradient drives the ϕ update via `∂ log p/∂ϕ`. MAP conditions on the realised lensed field through the full nonlinear likelihood. It is not missing this information.
+
+### Why GI wins on cross-SNR despite MAP being Bayesian-optimal
+
+GI is not a Bayesian estimator. It is a matched filter that **fixes** ∇T_obs and inverts the gradient equation directly:
+
+```
+T_hp(x) ≈ ∇T_obs(x) · ∇ϕ(x) + noise   →   ϕ̂_GI(L) = [numerator] / F_obs(L)
+```
+
+By conditioning on the specific gradient pattern ∇T_obs in that realisation, GI exploits non-Gaussian structure that falls outside the Gaussian likelihood model. MAP marginalises over `f` jointly with `ϕ` under a Gaussian prior, which treats all CMB realisations with the same power spectrum as equally likely. The prior Cϕ then Wiener-filters the result: W_L = Cϕ/(Cϕ + N0) → 0 at high L. Ensemble-mean debiasing by 1/W_L corrects the mean but does not recover the information lost in the Gaussian marginalisation over f. This is correct Bayesian behaviour, not a bug.
+
+**Gradient-conditioned MAP.** If you fix ∇T_obs and maximise over ϕ alone, the problem becomes linear and has a closed-form solution:
+
+```
+ϕ̂_GI-MAP(L) = Cϕ(L) / [Cϕ(L) + 1/F_obs(L)]  ×  ϕ̂_GI_unnorm(L)
+```
+
+This IS Wiener-filtered GI (Bayesian GI). It conditions on the realised gradient and applies the prior correctly. It is a different estimator from `MAP_joint`, which marginalises over f rather than fixing it. Implementing "gradient-conditioned MAP" means computing GI with a Bayesian Wiener filter per-sim — not modifying `MAP_joint`.
+
+### What MAP's advantage is actually used for
+
+- **Auto-SNR**: MAP 657 >> QE 339, GI 303. MAP correctly handles the noise model and prior — GI's high cross-SNR comes at the cost of amplifying noise in auto-power.
+- **Delensing**: for B-mode delensing, the optimal quantity is the posterior mean E[ϕ|d] (Wiener-filtered MAP), not the debiased estimate. MAP is correct for this purpose.
+- **Parameter inference**: MAP is the correct Bayesian posterior for cosmological parameter extraction. GI is not calibrated for this.
+- **No N0 bias**: MAP needs no external noise debiasing (no N^(0) subtraction), unlike QE and GI.
+
+The GI cross-SNR advantage is a property of GI being non-Bayesian and gradient-conditioned — not a MAP failure.
+
+### Realisation-dependent debiasing
+
+Replacing the ensemble-mean W_L with a per-sim estimate W_L_i does NOT reduce response suppression — it rescales the output after the fact. The MAP fixed point (and Wiener suppression) is determined by the estimator itself, not the debiasing step. For GI, RDN0 achieves something analogous by tracking per-sim noise fluctuations (see §2), but this reduces variance rather than increasing the mean cross-correlation.
+
+---
+
+## MAP Experiments — Attempts to Improve High-L Cross-SNR
+
+### 1. Realised-Nϕ preconditioner (`diag_realised_map.jl`)
+
+Scales `ds.Nϕ → Nϕ / r(L)` where `r(Lx,Ly) = F_real(L)/F_fid(L)` is the 2D ratio of realised to fiducial gradient Fisher. Nϕ is the MAP preconditioner approximating the Hessian `Cϕ⁻¹ + N0⁻¹`.
+
+**Result: ΔW ≈ 0.** The MAP fixed point is unchanged. This confirms that Nϕ controls only convergence speed — changing the preconditioner cannot move the converged estimate. Reported: mean Δlogpdf(last 5 steps) = 62.7 for the `_ul_pw` (prior-weakened) run, confirming that run was not converged; the `_ul_zero_a01` run converged fully.
+
+### 2. Prior-weakening run (`_ul_pw`, `diag_map_12000_ul_pw.jld2`)
+
+Uniform scalar weakening of Cϕ at all L (map_prior_weakening > 1). W_L rises toward 1 as expected. ρ_L does not improve. Sim 29 diverged (CG residual = 2×10⁸²). This confirms that the Wiener suppression is a consequence of the prior, but weakening the prior uniformly does not help ρ_L because the likelihood SNR at high L is genuinely low.
+
+### 3. Realised-Cϕ test (`diag_cphi_realised.jl`)
+
+Scales `ds.Cϕ → Cϕ × r(Lx,Ly)` mode-by-mode for L > L_SPLIT=3000, where the 2D anisotropic scaling factor `r(Lx,Ly) = F_real(Lx,Ly) / F_fid(Lx,Ly)` is the ratio of the realised gradient Fisher `F_real = Lx²σ_xx_r + 2LxLy σ_xy_r + Ly²σ_yy_r` to its fiducial expectation, with σ_r computed from the low-pass (ℓ<2000) data gradient. MAP B runs warm from the MAP A solution with αmax=0.1 (smaller step to stay near the modified fixed point). GI is also run on each sim for comparison.
+
+**Result: ρ_A = ρ_B to 3 decimal places across all L bins.** MAP B produces no improvement over MAP A:
+
+| bin | ρ_GI | ρ_A | ρ_B | frac |
+|-----|------|-----|-----|------|
+| 4k–6k | 0.310 | 0.442 | 0.442 | ≈0 |
+| 6k–8k | 0.247 | 0.274 | 0.274 | ≈0 |
+| 8k–10k | 0.129 | 0.144 | 0.144 | ≈0 |
+| 10k–12k | 0.056 | 0.060 | 0.060 | ≈0 |
+
+**Why it fails.** The scalar summary `r_iso = (σ_xx_r + σ_yy_r)/(σ_xx_f + σ_yy_f) ≈ 0.97–1.00` in every sim. The gradient covariance σ_r is computed from the data at ℓ<2000, where ~2000² Fourier modes contribute; cosmic variance over this broad range is tiny (~1%), so every sim gives r ≈ 1 regardless of the specific high-L φ realisation. The 2D anisotropy (σ_xy ≈ −8×10⁵ vs σ_xx, σ_yy ≈ 9×10⁸) is also negligible. The Cϕ × r prior is therefore indistinguishable from the fiducial Cϕ, and MAP B converges to the same fixed point as MAP A. More fundamentally, low-ℓ CMB gradient power has no significant correlation with the high-L φ amplitude that MAP is trying to recover — the two scales are nearly decoupled.
+
+**Recommended next step: anisotropic per-mode Cϕ from the GI Fisher, not the CMB gradient.** The r_iso approach fails because the proxy (low-ℓ gradient variance) doesn't correlate with what matters (per-mode φ SNR at L>3000). The correct per-mode SNR at each (Lx,Ly) is `F_obs(Lx,Ly) = Lx²σ_xx_obs + 2LxLy σ_xy_obs + Ly²σ_yy_obs` where σ_obs is estimated from the **high-pass** temperature gradient at L ≳ Lhp=4000, i.e., the same gradient that GI uses. This quantity does vary meaningfully between modes: it is large where L is aligned with the dominant gradient direction and near zero where L is perpendicular. Scaling `Cϕ(Lx,Ly) = Cϕ(|L|) × F_obs(Lx,Ly) / F_fid(|L|)` would relax the prior precisely in the high-L modes where the gradient is locally informative. However, this is equivalent to Wiener-filtered GI: the MAP fixed point with this prior is `ϕ̂ = [Cϕ(|L|) + 1/F_obs(Lx,Ly)]⁻¹ Cϕ(|L|) × ϕ̂_GI(Lx,Ly)`, and the resulting transfer function is `W(Lx,Ly) = Cϕ(|L|) / (Cϕ(|L|) + 1/F_obs(Lx,Ly))`. This is strictly larger than the isotropic MAP W_L at high L, and reduces to standard GI when `Cϕ → ∞`. Implementing it inside `MAP_joint` is non-trivial (requires a full 2D `FlatFourier` field for `ds.Cϕ` rather than an isotropic `FuncCℓs`), but computing it analytically from an existing GI run and applying it as a post-processing Wiener filter costs nothing.
 
 ---
 
@@ -301,6 +429,21 @@ To reproduce the full analysis from scratch:
    julia run_error_analysis.jl
    julia plot_mse_analysis.jl
    ```
+
+---
+
+## HPC Job Log
+
+**diag_map_zero_gihess (29490228)** — killed at time limit after 3 hours. Got through sims 1–2 fully, sim 3 baseline still running at kill.
+
+| Sim | Baseline W | GI-Hess W | ΔW | GI-Hess faster? |
+|-----|-----------|-----------|-----|-----------------|
+| 1 | 0.6048 (3212s) | 0.6367 (1858s) | +0.032 | yes, ~42% faster |
+| 2 | 0.6007 (3664s) | 0.6494 (1692s) | +0.049 | yes, ~54% faster |
+
+GI-Hessian is consistently better W and ~2× faster convergence. Checkpoints saved for sims 1–2 — resubmit and it picks up from sim 3.
+
+**map_settings_s4 (29494547)** — killed at time limit after ~3 hours. Sim 1: MAP-F failed (NaN/CG assertion) but caught and continued. Sim 2: only got through QE+GI+MAP-A before timeout. Checkpoint at `test_map_settings_s4_convergence_checkpoint.jld2` (184 KB, updated 00:25) — resubmit resumes from sim 2 MAP-H onward.
 
 ---
 

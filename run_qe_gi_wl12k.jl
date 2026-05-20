@@ -13,7 +13,7 @@
 import Pkg; Pkg.activate(@__DIR__)
 using CMBLensing, LinearAlgebra
 import CMBLensing.Setfield: @set
-using Statistics: mean
+using Statistics: mean, median
 using JLD2, Printf
 include("utils.jl"); using .Utils
 
@@ -35,10 +35,10 @@ const Cℓ         = camb(r=0.05, ℓmax=35000)
 const θpix       = 0.7438046267475303    # pixel width (arcmin); ℓ_Nyquist ≈ 14500
 const Nside      = 512
 const pol        = :I
-const nsims      = 1000
+const nsims      = 100
 const seed0      = 1000
 const Δℓ         = 30
-const nsims_map  = 400
+const nsims_map  = 500
 const MAPJ_STEPS = 40
 
 println("f_sky_patch = $(round((Nside*θpix*π/(180*60))^2/(4π); sigdigits=4))")
@@ -55,6 +55,8 @@ function run_noise_level(μKarcminT::Float64, suffix::String, Lmax::Int, beamFWH
                          map_nburnin_hessian::Int=typemax(Int),
                          map_prior_deproj::Float64=0.0,
                          map_prior_weakening::Float64=1.0,
+                         map_hl_prior_weakening::Float64=1.0,
+                         map_hl_prior_Lmin::Int=3000,
                          map_nsims::Int=nsims_map,
                          map_nsteps::Int=MAPJ_STEPS,
                          map_warmstart_weights::Symbol=:unlensed,
@@ -267,8 +269,10 @@ function run_noise_level(μKarcminT::Float64, suffix::String, Lmax::Int, beamFWH
                     seed_s  = haskey(f, "sim_$s/seed") ? read(f, "sim_$s/seed") : seed0 + s
                     ds_qe_s = load_sim(; seed=seed_s, load_kwargs...,
                                          bandpass_mask=qe_bandpass, Cℓn=qe_Cℓn_retro).ds
-                    n0_rdn0_s = Float64.(cov_to_Cℓ(N0_bias(ds_qe_s; weights=:unlensed, realization_spec=:data).N0; Δℓ=Δℓ).Cℓ)
-                    f["sim_$s/N0_rdn0"] = n0_rdn0_s
+                    cl_rdn0_s = cov_to_Cℓ(N0_bias(ds_qe_s; weights=:unlensed, realization_spec=:data).N0; Δℓ=Δℓ)
+                    n0_rdn0_s = Float64.(cl_rdn0_s.Cℓ)
+                    f["sim_$s/N0_rdn0"]     = n0_rdn0_s
+                    f["sim_$s/N0_rdn0_ell"] = Float64.(collect(cl_rdn0_s.ℓ))
                 end
             end
             println("\n  Done.")
@@ -365,15 +369,17 @@ function run_noise_level(μKarcminT::Float64, suffix::String, Lmax::Int, beamFWH
     end
 
     # ── Retroactive GI lin-RD analytic-baseline N0 ─────────────────────────────
+    # Gated on _v2 sentinel so a fix to gi_n0_linrd_analyticbaseline forces regen
+    # even when the old (stale) N0_gi_linrd_ab keys already exist.
     if isfile(phi_maps_file)
         sims_need_linrd_ab = Int[]
         jldopen(phi_maps_file, "r") do f
             for s in sort(collect(phi_sims_done))
-                haskey(f, "sim_$s/N0_gi_linrd_ab") || push!(sims_need_linrd_ab, s)
+                haskey(f, "sim_$s/N0_gi_linrd_ab_v2") || push!(sims_need_linrd_ab, s)
             end
         end
         if !isempty(sims_need_linrd_ab)
-            println("\nRetroactive GI lin-RD analytic-baseline N0: $(length(sims_need_linrd_ab)) sims...")
+            println("\nRetroactive GI lin-RD analytic-baseline N0 (v2): $(length(sims_need_linrd_ab)) sims...")
             jldopen(phi_maps_file, "a+") do f
                 for (i, s) in enumerate(sims_need_linrd_ab)
                     print("\r  linRD-AB N0 $i/$(length(sims_need_linrd_ab))"); flush(stdout)
@@ -382,8 +388,12 @@ function run_noise_level(μKarcminT::Float64, suffix::String, Lmax::Int, beamFWH
                     n0_ab  = gi_n0_linrd_analyticbaseline(ds_s;
                         Lgrad=2000, Lhp=4000, Lmax=Lmax, Δℓ=Δℓ,
                         smooth_C_data=true, smooth_window=9, clamp_negative=false)
+                    for k in ("N0_gi_linrd_ab_ell", "N0_gi_linrd_ab")
+                        haskey(f, "sim_$s/$k") && delete!(f, "sim_$s/$k")
+                    end
                     f["sim_$s/N0_gi_linrd_ab_ell"] = Float64.(n0_ab.ℓ)
                     f["sim_$s/N0_gi_linrd_ab"]     = Float64.(n0_ab.Cℓ)
+                    f["sim_$s/N0_gi_linrd_ab_v2"]  = true
                 end
             end
             println("\n  Done.")
@@ -450,7 +460,7 @@ function run_noise_level(μKarcminT::Float64, suffix::String, Lmax::Int, beamFWH
         end
     end
 
-    map_exclude = Set([40, 150]) ∪ map_extra_exclude
+    map_exclude = map_extra_exclude
 
     for s in (nsims_map_done + 1):map_nsims
         s ∈ map_exclude && (println("  MAP Sim $s skipped"); continue)
@@ -458,9 +468,22 @@ function run_noise_level(μKarcminT::Float64, suffix::String, Lmax::Int, beamFWH
         print("  MAP Sim $s/$map_nsims (seed=$seed) ... "); flush(stdout)
 
         (; ϕ, ds) = load_sim(; seed=seed, map_load_kwargs...)
-        if map_prior_weakening != 1.0
-            Cϕ_conc = ds.Cϕ(;)   # evaluate ParamDependentOp → concrete Diagonal
-            ds = @set ds.Cϕ = Diagonal(map_prior_weakening * Cϕ_conc.diag)
+        if map_prior_weakening != 1.0 || map_hl_prior_weakening != 1.0
+            Cϕ_conc = ds.Cϕ(;)
+            new_diag = map_prior_weakening * Cϕ_conc.diag
+            if map_hl_prior_weakening != 1.0
+                # Build a 2D L grid matching the Fourier field layout and scale
+                # C_ϕ by map_hl_prior_weakening for all modes with L > map_hl_prior_Lmin.
+                ϕ_f    = FlatFourier(Cϕ_conc.diag.arr, Cϕ_conc.diag.proj)
+                proj   = ϕ_f.proj
+                NyF, NxF = size(ϕ_f.arr)
+                ℓx2D   = repeat(proj.ℓx[1:NxF]', NyF, 1)
+                ℓy2D   = repeat(proj.ℓy[1:NyF],  1,   NxF)
+                L2     = @. ℓx2D^2 + ℓy2D^2
+                scale  = @. ifelse(L2 > map_hl_prior_Lmin^2, Float64(map_hl_prior_weakening), 1.0)
+                new_diag = FlatFourier(new_diag.arr .* scale, proj)
+            end
+            ds = @set ds.Cϕ = Diagonal(new_diag)
         end
 
         ϕ_start = if map_zero_start
@@ -495,14 +518,20 @@ function run_noise_level(μKarcminT::Float64, suffix::String, Lmax::Int, beamFWH
         if s ∉ map_phi_done
             jldopen(MAP_phi_file, "a+") do f
                 f["sim_$s/ϕ_true"] = Float64.(Map(ϕ).arr)
-                ϕ_mj !== nothing && (f["sim_$s/ϕ_mj"] = Float64.(Map(ϕ_mj).arr))
-                f["sim_$s/seed"]   = seed
+                if ϕ_mj !== nothing
+                    f["sim_$s/ϕ_mj"] = Float64.(Map(ϕ_mj).arr)
+                    lp_final = logpdf_histories[end][end]
+                    f["sim_$s/logpdf_final"] = lp_final
+                end
+                f["sim_$s/seed"] = seed
             end
             push!(map_phi_done, s)
         end
 
         nsims_map_done += 1; push!(map_seeds_done, seed)
-        W_mj = !isempty(R_mj_sims) ? mean(reduce(hcat, R_mj_sims); dims=2)[:] : nothing
+        # Use per-bin median: robust against rare realizations where C_true(ℓ)≈0 in a
+        # narrow bin sends the cross/true ratio to infinity and corrupts the arithmetic mean.
+        W_mj = !isempty(R_mj_sims) ? [median(R[i] for R in R_mj_sims) for i in 1:length(R_mj_sims[1])] : nothing
         jldsave(MAP_WL_file; R_mj_sims, logpdf_histories, W_mj, nsims_map_done,
                 map_seeds_done, ℓ_template=ℓ_template_map)
         println("done"); flush(stdout)
@@ -548,27 +577,101 @@ function run_noise_level(μKarcminT::Float64, suffix::String, Lmax::Int, beamFWH
 
 end
 
-# ── S4-like: 1 µK-arcmin, 1′ beam ─────────────────────────────────────────────
-run_noise_level(1.0, "", 12000, 1.0; run_rdn0=true, run_map=false)
+
+# ── GI-Wiener (per-pixel Wiener, eq. 29 / Blake 2) ───────────────────────────
+function run_gi_wiener(μKarcminT::Float64, suffix::String;
+                       nsims_w::Int=100, Lmax::Int=12000, beamFWHM::Float64=0.3,
+                       Δℓ_wl::Int=150)
+    WL_file  = "results/WL_gi_wiener_12000$(suffix).jld2"
+    phi_file = "results/phi_maps_gi_wiener_12000$(suffix).jld2"
+    println("\n" * "="^70)
+    println("=== GI-Wiener  μKarcminT=$μKarcminT  Lmax=$Lmax  suffix=\"$suffix\" ===")
+    println("    WL:  $WL_file\n    phi: $phi_file")
+    println("="^70)
+
+    Cℓn = noiseCℓs(μKarcminT=μKarcminT, ℓknee=0, ℓmax=Lmax)
+    lkw = (Cℓ=Cℓ, Cℓn=Cℓn, θpix=θpix, T=Float64, Nside=Nside,
+           beamFWHM=beamFWHM, pol=pol, bandpass_mask=LowPass(Lmax),
+           pixel_mask_kwargs=(edge_padding_deg=0, apodization_deg=0, num_ptsrcs=0))
+
+    safe_div(a, b) = @. ifelse(abs(b) > 0.0, a / b, 0.0)
+
+    # resume
+    sum_R = W_giw = ℓ_tmpl = nothing
+    nsims_done = 0; seeds_done = Int[]
+    if isfile(WL_file)
+        d = JLD2.load(WL_file)
+        lf(k) = (haskey(d,k) && d[k] !== nothing) ? Float64.(d[k]) : nothing
+        sum_R = lf("sum_R"); W_giw = lf("W_giw"); ℓ_tmpl = lf("ℓ_template")
+        haskey(d,"nsims_done")  && (nsims_done  = d["nsims_done"])
+        haskey(d,"seeds_done")  && (seeds_done  = d["seeds_done"])
+        println("Resumed: $nsims_done / $nsims_w sims")
+    end
+    phi_done = Set{Int}()
+    if isfile(phi_file)
+        try
+            jldopen(phi_file, "r") do f
+                for k in keys(f)
+                    m = match(r"^sim_(\d+)$", k); m !== nothing && push!(phi_done, parse(Int, m.captures[1]))
+                end
+            end
+            println("$(length(phi_done)) phi maps already in $phi_file")
+        catch err
+            @warn "phi_file corrupted ($err) — deleting"; rm(phi_file)
+        end
+    end
+
+    for s in (nsims_done + 1):nsims_w
+        seed = seed0 + s
+        print("  GIW sim $s/$nsims_w (seed=$seed) ... "); flush(stdout)
+        (; ϕ, ds) = load_sim(; seed=seed, lkw...)
+
+        ϕgiw = gi_estimate_corrected(ds; Lhp=4000, Lmax=Lmax)
+
+        cl_tt  = get_Cℓ(ϕ;      Δℓ=Δℓ_wl)
+        cl_tgw = get_Cℓ(ϕ, ϕgiw; Δℓ=Δℓ_wl)
+
+        if ℓ_tmpl === nothing
+            ℓ_tmpl = Float64.(collect(cl_tt.ℓ))
+            sum_R  = zeros(Float64, length(ℓ_tmpl))
+        end
+        sum_R .+= safe_div(Float64.(cl_tgw.Cℓ), Float64.(cl_tt.Cℓ))
+        nsims_done += 1; push!(seeds_done, seed)
+        W_giw = sum_R ./ nsims_done
+
+        jldopen(phi_file, "a+") do f
+            if s ∉ phi_done
+                f["sim_$s/ϕ_true"]  = Float64.(Map(ϕ).arr)
+                f["sim_$s/ϕ_gi_w"]  = Float64.(Map(ϕgiw).arr)
+                f["sim_$s/seed"]    = seed
+                push!(phi_done, s)
+            end
+        end
+        @save WL_file sum_R W_giw ℓ_template=ℓ_tmpl nsims_done seeds_done
+        println("done"); flush(stdout)
+    end
+    println("GI-Wiener done! $nsims_done sims.  Output: $WL_file, $phi_file")
+end
+
+run_gi_wiener(0.1, "_ul")
 
 # ── S4-like: 1 µK-arcmin, 1′ beam ─────────────────────────────────────────────
-run_noise_level(1.0, "", 12000, 1.0; map_file_suffix="_70", map_zero_start=false, run_map=false, map_nburnin_hessian=2,map_nsteps=70,
-                map_nsims=300)
-
+#run_noise_level(1.0, "", 12000, 1.0; run_rdn0=true, run_map=false)
 
 # ── Ultra-low noise QE/GI (existing sims — loop skips if already complete) ───
-run_noise_level(0.1, "_ul", 12000, 0.3; Δℓ_wl=150, run_rdn0=true, map_zero_start=true, run_map=false)
+
+
 
 run_noise_level(0.1, "_ul", 12000, 0.3;
                 Δℓ_wl=150,
                 run_rdn0=false,
                 run_map=true,
-                map_file_suffix="_ul_hess3",
+                map_file_suffix="_ul_zero_a01",
                 map_zero_start=true,
                 map_αmax=0.05,
-                map_nburnin_hessian=2,
-                map_nsteps=60,
-                map_nsims=150)
-
+                map_nburnin_hessian=typemax(Int),
+                map_nsteps=70,
+                map_nsims=300, map_extra_exclude=Set{Int}([100,102]))
 
 println("\nAll done.")
+

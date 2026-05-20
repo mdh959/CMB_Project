@@ -9,7 +9,7 @@ export get_Cℓ_fft, bin_spectrum, bin_stat, bin_stat_err
 export grad_fft
 
 # ── Gradient Inversion estimator ──
-export gi_estimate, gi_twoleg, gi_estimate_boryana, gi_estimate_corrected
+export gi_estimate, gi_twoleg, gi_estimate_boryana, gi_estimate_corrected, gi_estimate_wiener_fast
 
 # ── GI N0 estimators ──
 export gi_n0_fixed_gradient_mc, gi_n0_mc,
